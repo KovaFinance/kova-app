@@ -1,3 +1,5 @@
+import path from "node:path";
+
 // Content-Security-Policy. Permissive on script/style (the app uses inline styles and
 // Next/stellar-sdk need eval/wasm) but locks down framing, base-uri and the network
 // allowlist (Stellar RPC/Horizon, the OZ Channels relayer, Supabase, Mercury).
@@ -48,14 +50,17 @@ const nextConfig = {
   // passkey-kit / stellar-sdk are browser-oriented; keep them out of server bundling edges
   webpack: (config, { webpack }) => {
     config.resolve.fallback = { ...config.resolve.fallback, fs: false, net: false, tls: false };
-    // stellar-sdk v14 `/minimal/bindings/config.js` does a top-level
-    // require("../../package.json") for contract-bindings CODEGEN metadata that's never used at
-    // runtime, and the relative path doesn't resolve under webpack (no lib/package.json). It's
-    // pulled into the client via passkey-kit's `@stellar/stellar-sdk/minimal` import. Ignore it.
+    // stellar-sdk v14 `/minimal/bindings/config.js` does `require("../../package.json")` for a
+    // version string, but the compiled relative path is off by one dir (resolves to a nonexistent
+    // `lib/package.json`). It's pulled in (and EXECUTED) at runtime via passkey-kit's
+    // `@stellar/stellar-sdk/minimal` import. Redirect that require to the real package.json (3 dirs
+    // up = the stellar-sdk root) so it resolves instead of throwing "Cannot find module".
     config.plugins.push(
-      new webpack.IgnorePlugin({
-        resourceRegExp: /package\.json$/,
-        contextRegExp: /@stellar[\\/]stellar-sdk[\\/]lib[\\/]minimal[\\/]bindings/,
+      new webpack.NormalModuleReplacementPlugin(/^\.\.\/\.\.\/package\.json$/, (resource) => {
+        const ctx = resource.context || "";
+        if (/@stellar[\\/]stellar-sdk[\\/]lib[\\/]minimal[\\/]bindings/.test(ctx)) {
+          resource.request = path.join(ctx, "..", "..", "..", "package.json");
+        }
       })
     );
     return config;
