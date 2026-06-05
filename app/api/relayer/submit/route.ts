@@ -40,6 +40,13 @@ export async function POST(req: NextRequest) {
     const result = await server.send(xdr);
     return NextResponse.json({ ok: true, result });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "relayer submit failed" }, { status: 502 });
+    // Surface the relayer's structured details (e.g. { fee, resourceFee }) for debugging.
+    return NextResponse.json(
+      {
+        error: e?.message ?? "relayer submit failed",
+        details: e?.details ?? e?.context ?? e?.cause ?? null,
+      },
+      { status: 502 }
+    );
   }
 }
