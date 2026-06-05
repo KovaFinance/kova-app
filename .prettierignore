@@ -1,0 +1,7 @@
+.next
+node_modules
+contracts
+package-lock.json
+public
+# Markdown docs are authored by hand — don't let Prettier reflow prose.
+*.md

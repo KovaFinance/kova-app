@@ -1,0 +1,25 @@
+name: indexer-cron
+
+# Free indexer cron: polls the deployed app's secret-guarded poll route so vault
+# events are backfilled into Postgres. Set repo secrets KOVA_APP_URL and INDEXER_SECRET.
+on:
+  schedule:
+    - cron: "*/10 * * * *" # every ~10 min (GitHub min is 5; may be delayed)
+  workflow_dispatch: {}
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Poll the indexer
+        env:
+          APP_URL: ${{ secrets.KOVA_APP_URL }}
+          SECRET: ${{ secrets.INDEXER_SECRET }}
+        run: |
+          if [ -z "$APP_URL" ] || [ -z "$SECRET" ]; then
+            echo "Set KOVA_APP_URL and INDEXER_SECRET repo secrets."; exit 0
+          fi
+          code=$(curl -sS -o /tmp/resp.json -w "%{http_code}" --max-time 60 \
+            -X POST "$APP_URL/api/indexer/poll" -H "x-indexer-secret: $SECRET")
+          echo "status: $code"; cat /tmp/resp.json || true
+          [ "$code" = "200" ] || { echo "poll failed"; exit 1; }

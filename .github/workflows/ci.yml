@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  web:
+    name: Web (typecheck · lint · test · fail-closed build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Unit tests
+        run: npm run test
+
+      # Proves the fail-closed wiring SUCCEEDS when all required env is present.
+      # Dummy values: URLs must be valid URLs; the rest only need to be non-empty.
+      # No network call happens at build time, so these are inert placeholders.
+      - name: Production build (fail-closed, placeholder env)
+        env:
+          NODE_ENV: production
+          NEXT_PUBLIC_VAULT_CONTRACT_ID: CDUMMYVAULTCONTRACTIDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          NEXT_PUBLIC_USDC_SAC: CDUMMYUSDCSACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          NEXT_PUBLIC_RELAYER_JWT: dummy.jwt.token
+          NEXT_PUBLIC_WALLET_WASM_HASH: "0000000000000000000000000000000000000000000000000000000000000000"
+          NEXT_PUBLIC_RPC_URL: https://soroban-testnet.stellar.org
+          NEXT_PUBLIC_HORIZON_URL: https://horizon-testnet.stellar.org
+          NEXT_PUBLIC_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+        run: npm run build
+
+      # Negative test: a production build with required vars unset MUST fail closed.
+      - name: Production build fails closed when env is missing
+        env:
+          NODE_ENV: production
+        run: |
+          if npm run build; then
+            echo "::error::Production build succeeded with missing env — fail-closed guard is broken."
+            exit 1
+          else
+            echo "Build correctly failed closed on missing env."
+          fi
+
+  contracts:
+    name: Soroban vault (cargo test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: cargo test
+        working-directory: contracts/vault
+        run: cargo test

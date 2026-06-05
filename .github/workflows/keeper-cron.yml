@@ -1,0 +1,26 @@
+name: keeper-cron
+
+# Income-mode keeper (Phase 6). Triggers monthly yield payouts. Set repo secrets
+# KOVA_APP_URL and KEEPER_SECRET. NOTE: payouts require the passkey smart-wallet policy
+# signer (Phase 3) — until that's wired this is a no-op plan (see app/api/keeper/run).
+on:
+  schedule:
+    - cron: "0 9 1 * *" # 09:00 UTC on the 1st of each month
+  workflow_dispatch: {}
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run keeper
+        env:
+          APP_URL: ${{ secrets.KOVA_APP_URL }}
+          SECRET: ${{ secrets.KEEPER_SECRET }}
+        run: |
+          if [ -z "$APP_URL" ] || [ -z "$SECRET" ]; then
+            echo "Set KOVA_APP_URL and KEEPER_SECRET repo secrets."; exit 0
+          fi
+          code=$(curl -sS -o /tmp/resp.json -w "%{http_code}" --max-time 120 \
+            -X POST "$APP_URL/api/keeper/run" -H "x-keeper-secret: $SECRET")
+          echo "status: $code"; cat /tmp/resp.json || true
+          [ "$code" = "200" ] || { echo "keeper failed"; exit 1; }
