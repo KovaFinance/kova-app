@@ -1,0 +1,219 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: "Anton", Impact, sans-serif;
+  --font-body: "Archivo", system-ui, sans-serif;
+  --font-mono: "Space Mono", ui-monospace, monospace;
+
+  --ink: #111111;
+  --paper: #fff8ee;
+  --sun: #ffd23f;
+  --coral: #ff5c39;
+  --green: #0b6e4f;
+  --green-ink: #063b2b;
+  --card: #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  padding: 0;
+  margin: 0;
+}
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  /* faint dotted texture for atmosphere */
+  background-image: radial-gradient(rgba(17, 17, 17, 0.05) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+/* ---------- type ---------- */
+.display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: 0.5px;
+  line-height: 0.92;
+  text-transform: uppercase;
+}
+.mono {
+  font-family: var(--font-mono);
+}
+.num {
+  font-family: var(--font-body);
+  font-weight: 800;
+  letter-spacing: -1.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- neo-brutalist primitives ---------- */
+.card {
+  background: var(--card);
+  border: 3px solid var(--ink);
+  border-radius: 18px;
+  box-shadow: 6px 6px 0 0 var(--ink);
+}
+.card-flat {
+  background: var(--card);
+  border: 3px solid var(--ink);
+  border-radius: 18px;
+}
+
+.btn {
+  font-family: var(--font-display);
+  font-size: 17px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  padding: 15px 20px;
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 5px 5px 0 0 var(--ink);
+  cursor: pointer;
+  transition:
+    transform 0.08s ease,
+    box-shadow 0.08s ease;
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.btn:active {
+  transform: translate(3px, 3px);
+  box-shadow: 2px 2px 0 0 var(--ink);
+}
+.btn-primary {
+  background: var(--sun);
+}
+.btn-coral {
+  background: var(--coral);
+  color: #fff;
+}
+.btn-green {
+  background: var(--green);
+  color: #fff;
+}
+.btn-ghost {
+  box-shadow: none;
+  background: transparent;
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: 5px 5px 0 0 var(--ink);
+}
+
+.chip {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  padding: 4px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--card);
+}
+.chip-sun {
+  background: var(--sun);
+}
+.chip-green {
+  background: var(--green);
+  color: #fff;
+}
+.chip-coral {
+  background: var(--coral);
+  color: #fff;
+}
+
+.field {
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  padding: 14px 16px;
+  font-family: var(--font-body);
+  font-size: 16px;
+  width: 100%;
+  background: #fff;
+}
+.label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #555;
+}
+
+/* ---------- phone frame (landing) ---------- */
+.phone {
+  width: 300px;
+  border: 4px solid var(--ink);
+  border-radius: 36px;
+  background: var(--paper);
+  box-shadow: 10px 10px 0 0 var(--ink);
+  overflow: hidden;
+}
+
+/* range slider, neo style */
+input[type="range"].neo {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 14px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: #fff;
+  width: 100%;
+}
+input[type="range"].neo::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--coral);
+  border: 3px solid var(--ink);
+  cursor: pointer;
+  margin-top: -1px;
+}
+input[type="range"].neo::-moz-range-thumb {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--coral);
+  border: 3px solid var(--ink);
+  cursor: pointer;
+}
+
+/* scrollbar tidy on mobile frames */
+.noscroll::-webkit-scrollbar {
+  display: none;
+}
+.noscroll {
+  scrollbar-width: none;
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.pop {
+  animation: pop 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
