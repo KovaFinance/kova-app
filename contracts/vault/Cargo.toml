@@ -1,0 +1,27 @@
+[package]
+name = "kova-vault"
+version = "0.1.0"
+edition = "2021"
+description = "Kova non-custodial savings vault (GROW/INCOME) for Soroban"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = "22"
+
+[dev-dependencies]
+soroban-sdk = { version = "22", features = ["testutils"] }
+# TEST-ONLY mock yield venue, registered in unit tests to exercise the CPI path.
+mock-venue = { path = "../mock_venue" }
+
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+debug = 0
+strip = "symbols"
+debug-assertions = false
+panic = "abort"
+codegen-units = 1
+lto = true
