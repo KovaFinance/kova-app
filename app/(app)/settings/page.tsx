@@ -1,9 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/lib/store";
 import { Icon } from "@/components/kova";
 import { tr } from "@/lib/i18n";
+import { addRecoveryPasskey, enableAutoSplit } from "@/lib/stellar/passkey";
+import { fetchProfile, saveProfile } from "@/lib/profile/client";
 
 const PRESETS = [
   { pct: 5, bps: 500 },
@@ -28,6 +31,56 @@ export default function SettingsPage() {
 
   const initial = (name || "K").charAt(0).toUpperCase();
   const isPasskey = account?.method === "passkey";
+
+  // recovery passkey + autonomous auto-save (passkey wallets only)
+  const [recoverBusy, setRecoverBusy] = useState(false);
+  const [recoverMsg, setRecoverMsg] = useState("");
+  const [autoSplit, setAutoSplit] = useState(false);
+  const [autoBusy, setAutoBusy] = useState(false);
+  const [autoMsg, setAutoMsg] = useState("");
+
+  useEffect(() => {
+    if (!account) return;
+    fetchProfile(account.publicKey).then((p) => setAutoSplit(Boolean(p?.auto_split)));
+  }, [account]);
+
+  const addRecovery = async () => {
+    setRecoverBusy(true);
+    setRecoverMsg("");
+    try {
+      await addRecoveryPasskey();
+      setRecoverMsg("✓ Dispositivo de recuperación agregado.");
+    } catch (e) {
+      setRecoverMsg(e instanceof Error ? e.message : "No se pudo agregar.");
+    } finally {
+      setRecoverBusy(false);
+    }
+  };
+
+  const toggleAutoSplit = async () => {
+    if (!account) return;
+    setAutoBusy(true);
+    setAutoMsg("");
+    try {
+      if (!autoSplit) {
+        const r = await fetch("/api/keeper/pubkey");
+        const { publicKey } = await r.json();
+        if (!publicKey) throw new Error("El keeper no está configurado.");
+        await enableAutoSplit(publicKey); // delegate the keeper signer (Face ID)
+        await saveProfile({ contractId: account.publicKey, autoSplit: true });
+        setAutoSplit(true);
+        setAutoMsg("✓ Ahorro automático activado.");
+      } else {
+        await saveProfile({ contractId: account.publicKey, autoSplit: false });
+        setAutoSplit(false);
+        setAutoMsg("Ahorro automático desactivado.");
+      }
+    } catch (e) {
+      setAutoMsg(e instanceof Error ? e.message : "No se pudo cambiar.");
+    } finally {
+      setAutoBusy(false);
+    }
+  };
 
   const logout = () => {
     signOut();
@@ -97,6 +150,96 @@ export default function SettingsPage() {
           </p>
         </div>
       </div>
+
+      {/* recovery passkey + autonomous auto-save — passkey wallets only */}
+      {isPasskey && (
+        <>
+          <div className="label" style={{ margin: "18px 0 8px" }}>
+            Recuperación · multi-dispositivo
+          </div>
+          <div className="card s2" style={{ padding: 16 }}>
+            <p className="dim" style={{ fontSize: 13, margin: "0 0 12px", lineHeight: 1.5 }}>
+              Agrega un segundo dispositivo (Face ID) como respaldo — si pierdes uno, no pierdes tu
+              wallet.
+            </p>
+            <button className="btn btn-secondary" disabled={recoverBusy} onClick={addRecovery}>
+              <Icon name="key" size={16} /> {recoverBusy ? "Agregando…" : "Agregar dispositivo"}
+            </button>
+            {recoverMsg && (
+              <p
+                className="mono"
+                style={{
+                  fontSize: 11.5,
+                  color: "var(--text-dim)",
+                  margin: "10px 0 0",
+                  textAlign: "center",
+                }}
+              >
+                {recoverMsg}
+              </p>
+            )}
+          </div>
+
+          <div className="label" style={{ margin: "18px 0 8px" }}>
+            Ahorro automático
+          </div>
+          <button
+            className="card s2"
+            style={{ padding: 16, width: "100%", textAlign: "left" }}
+            disabled={autoBusy}
+            onClick={toggleAutoSplit}
+          >
+            <div className="between">
+              <div style={{ flex: 1, paddingRight: 12 }}>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>Guardar mis ingresos solo</div>
+                <p className="faint" style={{ fontSize: 12, margin: "2px 0 0", lineHeight: 1.4 }}>
+                  Autoriza al keeper (solo la bóveda) para apartar tu % en cada ingreso, sin tocar
+                  nada.
+                </p>
+              </div>
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 44,
+                  height: 26,
+                  borderRadius: 999,
+                  flex: "none",
+                  background: autoSplit ? "var(--accent)" : "var(--surface-2)",
+                  border: "1px solid var(--border-strong)",
+                  position: "relative",
+                  transition: "background .15s",
+                }}
+              >
+                <span
+                  style={{
+                    position: "absolute",
+                    top: 2,
+                    left: autoSplit ? 20 : 2,
+                    width: 20,
+                    height: 20,
+                    borderRadius: 999,
+                    background: autoSplit ? "var(--on-accent)" : "var(--text-dim)",
+                    transition: "left .15s",
+                  }}
+                />
+              </span>
+            </div>
+          </button>
+          {autoMsg && (
+            <p
+              className="mono"
+              style={{
+                fontSize: 11.5,
+                color: "var(--text-dim)",
+                margin: "8px 0 0",
+                textAlign: "center",
+              }}
+            >
+              {autoMsg}
+            </p>
+          )}
+        </>
+      )}
 
       {/* quick links */}
       <div className="card pf-menu" style={{ marginTop: 18 }}>

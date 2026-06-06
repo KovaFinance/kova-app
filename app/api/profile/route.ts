@@ -35,6 +35,7 @@ const PatchSchema = z.object({
   displayName: z.string().max(120).optional(),
   savingsBps: z.number().int().min(0).max(10000).optional(),
   mode: z.enum(["grow", "income"]).optional(),
+  autoSplit: z.boolean().optional(),
 });
 
 /**

@@ -5,6 +5,7 @@ export interface ClientProfile {
   savings_bps: number;
   mode: string;
   kyc_status: string;
+  auto_split?: boolean;
 }
 
 export async function fetchProfile(contractId: string): Promise<ClientProfile | null> {
@@ -23,6 +24,7 @@ export async function saveProfile(patch: {
   savingsBps?: number;
   mode?: string;
   displayName?: string;
+  autoSplit?: boolean;
 }): Promise<boolean> {
   try {
     const r = await fetch(`/api/profile`, {

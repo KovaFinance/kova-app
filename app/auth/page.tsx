@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/lib/store";
 import { Icon, Logo } from "@/components/kova";
-import { createPasskeyWallet, connectExistingWallet, importSecretKey } from "@/lib/stellar/passkey";
+import { createPasskeyWallet, connectPasskeyWallet } from "@/lib/stellar/passkey";
 
 const FOOTER = "kova.app · stellar testnet · USDC";
 
@@ -13,51 +13,38 @@ export default function AuthPage() {
   const lang = useStore((s) => s.lang);
   const setLang = useStore((s) => s.setLang);
   const onboarded = useStore((s) => s.onboarded);
+  const account = useStore((s) => s.account);
   const signIn = useStore((s) => s.signIn);
 
-  const [busy, setBusy] = useState<null | string>(null);
-  const [advOpen, setAdvOpen] = useState(false);
-  const [secret, setSecret] = useState("");
+  // A returning passkey user is detected from the persisted `account` (its signer is
+  // in-memory only, so they still re-auth with Face ID — we just know which CTA to show).
+  const returning = account?.method === "passkey";
+
+  const [busy, setBusy] = useState<null | "create" | "signin">(null);
   const [err, setErr] = useState("");
+  const t = (es: string, en: string) => (lang === "es" ? es : en);
 
   const go = () => router.replace(onboarded ? "/home" : "/onboarding");
 
-  async function createFaceId() {
-    setBusy("faceid");
+  // Both flows run a Face ID ceremony. `create` registers a new passkey + smart wallet;
+  // `signin` discovers the existing passkey and resolves its wallet from our backend.
+  async function auth(kind: "create" | "signin") {
+    setBusy(kind);
     setErr("");
     try {
-      const signer = await createPasskeyWallet("Kova");
+      const signer =
+        kind === "create" ? await createPasskeyWallet("Kova") : await connectPasskeyWallet();
       signIn(signer);
-      setTimeout(go, 600);
+      setTimeout(go, 500);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Error");
       setBusy(null);
     }
   }
 
-  async function connect() {
-    setBusy("wallet");
-    setErr("");
-    try {
-      const signer = await connectExistingWallet();
-      signIn(signer);
-      go();
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Error");
-      setBusy(null);
-    }
-  }
-
-  function importKey() {
-    setErr("");
-    try {
-      const signer = importSecretKey(secret);
-      signIn(signer);
-      go();
-    } catch {
-      setErr(lang === "es" ? "Llave inválida" : "Invalid key");
-    }
-  }
+  // Primary CTA follows the detected state; the link offers the opposite path as an escape hatch.
+  const primary = returning ? "signin" : "create";
+  const alternate = returning ? "create" : "signin";
 
   return (
     <main className="kova-root">
@@ -98,26 +85,34 @@ export default function AuthPage() {
           </div>
         </div>
         <h1 style={{ fontSize: 24, textAlign: "center", marginTop: 6 }}>
-          Empieza a ahorrar
-          <br />
-          en segundos
+          {returning ? (
+            t("Bienvenido de vuelta", "Welcome back")
+          ) : (
+            <>
+              {t("Empieza a ahorrar", "Start saving")}
+              <br />
+              {t("en segundos", "in seconds")}
+            </>
+          )}
         </h1>
 
         <div style={{ flex: 1, minHeight: 18 }} />
 
-        {/* primary: Face ID */}
+        {/* primary: Face ID — sign in for returning users, create for new ones */}
         <button
           className="card"
           style={{ padding: 18, textAlign: "left", position: "relative" }}
-          onClick={createFaceId}
+          onClick={() => auth(primary)}
           disabled={!!busy}
         >
-          <span
-            className="chip on"
-            style={{ position: "absolute", top: 14, right: 14, fontSize: 10.5 }}
-          >
-            Recomendado
-          </span>
+          {!returning && (
+            <span
+              className="chip on"
+              style={{ position: "absolute", top: 14, right: 14, fontSize: 10.5 }}
+            >
+              {t("Recomendado", "Recommended")}
+            </span>
+          )}
           <div className="row" style={{ gap: 14 }}>
             <div
               className="tok"
@@ -133,63 +128,52 @@ export default function AuthPage() {
             </div>
             <div>
               <div style={{ fontWeight: 700, fontSize: 17 }}>
-                {busy === "faceid" ? "Creando…" : "Crear cuenta con Face ID"}
+                {busy === primary
+                  ? returning
+                    ? t("Entrando…", "Signing in…")
+                    : t("Creando…", "Creating…")
+                  : returning
+                    ? t("Iniciar sesión con Face ID", "Sign in with Face ID")
+                    : t("Crear cuenta con Face ID", "Create account with Face ID")}
               </div>
               <div className="dim" style={{ fontSize: 13, marginTop: 2 }}>
-                Sin banco, sin frase, sin gas
+                {returning
+                  ? t("Toca para entrar con Face ID", "Tap to unlock with Face ID")
+                  : t("Sin banco, sin frase, sin gas", "No bank, no seed phrase, no gas")}
               </div>
             </div>
           </div>
           <p className="dim" style={{ fontSize: 13, lineHeight: 1.45, margin: "14px 0 0" }}>
-            Tu cuenta está protegida por Face ID —{" "}
-            <b style={{ color: "var(--text)" }}>sin frase que perder.</b>
+            {returning ? (
+              t(
+                "Tu cuenta vive en este dispositivo, protegida por Face ID.",
+                "Your account lives on this device, protected by Face ID."
+              )
+            ) : (
+              <>
+                {t(
+                  "Tu cuenta está protegida por Face ID —",
+                  "Your account is protected by Face ID —"
+                )}{" "}
+                <b style={{ color: "var(--text)" }}>
+                  {t("sin frase que perder.", "no seed phrase to lose.")}
+                </b>
+              </>
+            )}
           </p>
         </button>
 
-        {/* secondary: connect wallet */}
+        {/* alternate path: the opposite action, for a wiped device or a fresh account */}
         <button
-          className="card s2 row"
-          style={{ padding: 16, gap: 14, marginTop: 12 }}
-          onClick={connect}
+          className="sp-link"
+          style={{ marginTop: 16, textAlign: "center" }}
+          onClick={() => auth(alternate)}
           disabled={!!busy}
         >
-          <div className="tok">
-            <Icon name="key" size={20} />
-          </div>
-          <div style={{ flex: 1, textAlign: "left" }}>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>
-              {busy === "wallet" ? "Conectando…" : "Conectar billetera"}
-            </div>
-            <div className="faint" style={{ fontSize: 12.5 }}>
-              ¿Ya usas Stellar? Freighter · Albedo · xBull
-            </div>
-          </div>
-          <Icon name="arrowR" size={18} style={{ color: "var(--text-faint)" }} />
+          {returning
+            ? t("Crear una cuenta nueva", "Create a new account")
+            : t("Ya tengo una cuenta", "I already have an account")}
         </button>
-
-        {/* advanced import */}
-        <button className="sp-link" style={{ marginTop: 14 }} onClick={() => setAdvOpen((v) => !v)}>
-          Opciones avanzadas
-        </button>
-        {advOpen && (
-          <div className="card s2" style={{ padding: 14, marginTop: 8 }}>
-            <div className="label" style={{ marginBottom: 8 }}>
-              Importar llave secreta (S…)
-            </div>
-            <input
-              className="snd-input"
-              placeholder="S…"
-              value={secret}
-              onChange={(e) => setSecret(e.target.value)}
-              spellCheck={false}
-              autoCapitalize="off"
-              autoCorrect="off"
-            />
-            <button className="btn btn-secondary" style={{ marginTop: 12 }} onClick={importKey}>
-              Importar
-            </button>
-          </div>
-        )}
 
         {err && (
           <p
@@ -204,7 +188,7 @@ export default function AuthPage() {
         </div>
       </div>
 
-      {busy === "faceid" && (
+      {!!busy && (
         <div
           style={{
             position: "absolute",
@@ -218,7 +202,7 @@ export default function AuthPage() {
           <div style={{ textAlign: "center", color: "var(--accent)" }}>
             <Icon name="face" size={72} sw={1.4} />
             <div className="label" style={{ marginTop: 14, color: "var(--text-dim)" }}>
-              Confirma con Face ID
+              {t("Confirma con Face ID", "Confirm with Face ID")}
             </div>
           </div>
         </div>

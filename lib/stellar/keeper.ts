@@ -121,3 +121,39 @@ export async function runKeeper(users: string[]): Promise<KeeperRunResult> {
   out.totalPaidUsd = Math.round(out.totalPaidUsd * 100) / 100;
   return out;
 }
+
+export interface AutoSplitResult {
+  users: number;
+  pending: number;
+  routed: number;
+  errors: { user: string; error: string }[];
+  note?: string;
+}
+
+/**
+ * Autonomous income routing (Phase 4 auto-split). For each user who opted in (`auto_split` in
+ * their profile, having delegated the keeper's ed25519 signer onto their wallet scoped to the
+ * vault — see `enableAutoSplit`), route any detected `pending_income` through the vault's
+ * `deposit_and_split` WITHOUT a per-payment tap, then mark it routed.
+ *
+ * EXECUTION (the wallet-side `deposit_and_split` signed by the delegated ed25519 key via the
+ * relayer) is the one piece that validates on the deployed HTTPS origin — the same gate as the
+ * rest of the passkey smart-wallet transaction path (Phase 3). Until then this safely reports
+ * the targets it WOULD route and moves no funds.
+ */
+export async function runAutoSplit(): Promise<AutoSplitResult> {
+  const { getAutoSplitContracts } = await import("@/lib/profile/repo");
+  const { getPendingIncome } = await import("@/lib/indexer/income-repo");
+  const users = await getAutoSplitContracts();
+  const out: AutoSplitResult = { users: users.length, pending: 0, routed: 0, errors: [] };
+
+  for (const user of users) {
+    const pend = await getPendingIncome(user).catch(() => []);
+    out.pending += pend.length;
+    // TODO(deploy): for each `pend`, build deposit_and_split(user, amount) and authorize it with
+    // the delegated keeper ed25519 signer (passkey-kit signAuthEntry + relayer submit), then
+    // markPendingIncome(routed). Requires the deployed passkey signing path.
+  }
+  out.note = "auto-split targets identified; delegated execution validates on the HTTPS deploy";
+  return out;
+}

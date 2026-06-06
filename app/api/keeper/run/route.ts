@@ -36,7 +36,12 @@ export async function POST(req: NextRequest) {
   // Server-side incident kill switch (runtime, NOT the client-exposed NEXT_PUBLIC one) — lets
   // ops halt autonomous payouts without a redeploy.
   if (process.env.KOVA_KILL_SWITCH === "true") {
-    return NextResponse.json({ ok: true, halted: true, claimed: 0, note: "KOVA_KILL_SWITCH active" });
+    return NextResponse.json({
+      ok: true,
+      halted: true,
+      claimed: 0,
+      note: "KOVA_KILL_SWITCH active",
+    });
   }
 
   try {
@@ -51,9 +56,12 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const { runKeeper } = await import("@/lib/stellar/keeper");
+    const { runKeeper, runAutoSplit } = await import("@/lib/stellar/keeper");
     const result = await runKeeper(targets);
-    return NextResponse.json({ ok: true, ...result });
+    const autoSplit = await runAutoSplit().catch((e) => ({
+      error: e?.message ?? "auto-split failed",
+    }));
+    return NextResponse.json({ ok: true, ...result, autoSplit });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? "keeper run failed" }, { status: 500 });
   }

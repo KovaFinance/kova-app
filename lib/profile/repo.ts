@@ -9,12 +9,14 @@ export interface Profile {
   notif_prefs: Record<string, unknown>;
   push_tokens: unknown[];
   kyc_status: string;
+  auto_split: boolean;
 }
 
 export async function getProfile(contractId: string): Promise<Profile | null> {
   const sql = getSql();
   const rows = await sql<Profile[]>`
-    select contract_id, display_name, lang, savings_bps, mode, notif_prefs, push_tokens, kyc_status
+    select contract_id, display_name, lang, savings_bps, mode, notif_prefs, push_tokens,
+           kyc_status, auto_split
     from user_profiles where contract_id = ${contractId}
   `;
   return rows[0] ?? null;
@@ -29,26 +31,37 @@ export async function getIncomeModeContracts(): Promise<string[]> {
   return rows.map((r) => r.contract_id);
 }
 
+/** Wallet contract ids of users who opted into autonomous income routing (auto-split). */
+export async function getAutoSplitContracts(): Promise<string[]> {
+  const sql = getSql();
+  const rows = await sql<{ contract_id: string }[]>`
+    select contract_id from user_profiles where auto_split = true
+  `;
+  return rows.map((r) => r.contract_id);
+}
+
 export interface ProfilePatch {
   contractId: string;
   lang?: string;
   displayName?: string;
   savingsBps?: number;
   mode?: string;
+  autoSplit?: boolean;
 }
 
 /** Create or update a profile. Only provided fields change (COALESCE on update). */
 export async function upsertProfile(p: ProfilePatch): Promise<void> {
   const sql = getSql();
   await sql`
-    insert into user_profiles (contract_id, lang, display_name, savings_bps, mode, updated_at)
+    insert into user_profiles (contract_id, lang, display_name, savings_bps, mode, auto_split, updated_at)
     values (${p.contractId}, ${p.lang ?? "es"}, ${p.displayName ?? null},
-            ${p.savingsBps ?? 1500}, ${p.mode ?? "grow"}, now())
+            ${p.savingsBps ?? 1500}, ${p.mode ?? "grow"}, ${p.autoSplit ?? false}, now())
     on conflict (contract_id) do update set
       lang         = coalesce(${p.lang ?? null}, user_profiles.lang),
       display_name = coalesce(${p.displayName ?? null}, user_profiles.display_name),
       savings_bps  = coalesce(${p.savingsBps ?? null}, user_profiles.savings_bps),
       mode         = coalesce(${p.mode ?? null}, user_profiles.mode),
+      auto_split   = coalesce(${p.autoSplit ?? null}, user_profiles.auto_split),
       updated_at   = now()
   `;
 }
