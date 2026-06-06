@@ -12,6 +12,7 @@ import { fetchProfile, saveProfile } from "./profile/client";
 
 interface State {
   lang: "es" | "en";
+  name: string; // display name for greetings/avatar (persisted, set at onboarding)
   account: { publicKey: string; method: string; label?: string } | null;
   signer: Signer | null; // in-memory only (not persisted)
   onboarded: boolean;
@@ -31,6 +32,7 @@ interface State {
   _hydrated: boolean;
 
   setLang: (l: "es" | "en") => void;
+  setName: (n: string) => void;
   signIn: (s: Signer) => void;
   signOut: () => void;
   setOnboarded: (v: boolean) => void;
@@ -54,6 +56,7 @@ export const useStore = create<State>()(
   persist(
     (set, get) => ({
       lang: "es",
+      name: "",
       account: null,
       signer: null,
       onboarded: false,
@@ -75,6 +78,8 @@ export const useStore = create<State>()(
         const { account } = get();
         if (account) void saveProfile({ contractId: account.publicKey, lang: l });
       },
+
+      setName: (n) => set({ name: n.trim() }),
 
       signIn: (s) => {
         set({
@@ -202,6 +207,7 @@ export const useStore = create<State>()(
 
       reset: () =>
         set({
+          name: "",
           account: null,
           signer: null,
           onboarded: false,
@@ -225,6 +231,7 @@ export const useStore = create<State>()(
       // Persist only ephemeral UI prefs — NEVER financial truth (that comes from chain).
       partialize: (s) => ({
         lang: s.lang,
+        name: s.name,
         account: s.account,
         onboarded: s.onboarded,
         savingsBps: s.savingsBps,

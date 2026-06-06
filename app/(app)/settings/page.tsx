@@ -1,184 +1,139 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Chip, Sheet, FaceIdBadge } from "@/components/ui";
 import { useStore } from "@/lib/store";
+import { Icon } from "@/components/kova";
 import { tr } from "@/lib/i18n";
-import { pct } from "@/lib/format";
+
+const PRESETS = [
+  { pct: 5, bps: 500 },
+  { pct: 10, bps: 1000 },
+  { pct: 15, bps: 1500 },
+  { pct: 20, bps: 2000 },
+];
+
+function shortKey(k: string) {
+  return k.length > 12 ? `${k.slice(0, 6)}…${k.slice(-5)}` : k;
+}
 
 export default function SettingsPage() {
   const router = useRouter();
+  const name = useStore((s) => s.name);
   const lang = useStore((s) => s.lang);
   const setLang = useStore((s) => s.setLang);
-  const bps = useStore((s) => s.savingsBps);
+  const savingsBps = useStore((s) => s.savingsBps);
   const setRate = useStore((s) => s.setRate);
   const account = useStore((s) => s.account);
   const signOut = useStore((s) => s.signOut);
 
-  const [advOpen, setAdvOpen] = useState(false);
-  const [revealing, setRevealing] = useState(false);
-  const [revealed, setRevealed] = useState<string | null>(null);
+  const initial = (name || "K").charAt(0).toUpperCase();
+  const isPasskey = account?.method === "passkey";
 
-  function reveal() {
-    setRevealing(true);
-    // Production: passkey/smart-wallet keys are non-exportable; there is no seed phrase.
-    setTimeout(() => {
-      setRevealing(false);
-      setRevealed(tr(lang, "set.noExport"));
-    }, 1000);
-  }
+  const logout = () => {
+    signOut();
+    router.replace("/auth");
+  };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <h1 className="display" style={{ fontSize: 30 }}>
-        {tr(lang, "set.title")}
-      </h1>
+    <div className="screen pad pf-screen">
+      <div className="pf-top">
+        <div style={{ width: 40 }} />
+        <button className="tok" aria-label="Ajustes">
+          <Icon name="settings" size={19} />
+        </button>
+      </div>
 
-      {/* savings % */}
-      <div className="card" style={{ padding: 18 }}>
-        <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span className="label">{tr(lang, "set.rate")}</span>
-          <span className="num" style={{ fontSize: 22 }}>
-            {pct(bps)}
-          </span>
+      <div className="pf-user">
+        <div className="pf-avatar">{initial}</div>
+        <div className="pf-name">{name || "Mi cuenta"}</div>
+        <div className="pf-sub">{account ? shortKey(account.publicKey) : "Mi cuenta"}</div>
+      </div>
+
+      {/* savings rate */}
+      <div className="label" style={{ margin: "4px 0 8px" }}>
+        {tr(lang, "set.rate")}
+      </div>
+      <div className="card s2" style={{ padding: 16 }}>
+        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+          {PRESETS.map((p) => (
+            <button
+              key={p.bps}
+              className={"chip" + (savingsBps === p.bps ? " on" : "")}
+              onClick={() => setRate(p.bps)}
+            >
+              {p.pct}%
+            </button>
+          ))}
         </div>
-        <input
-          className="neo"
-          style={{ marginTop: 12 }}
-          type="range"
-          min={500}
-          max={3000}
-          step={500}
-          value={bps}
-          onChange={(e) => setRate(Number(e.target.value))}
-        />
+        <p className="faint" style={{ fontSize: 12, margin: "12px 0 0", lineHeight: 1.45 }}>
+          Cada ingreso se divide automáticamente al porcentaje que elijas.
+        </p>
       </div>
 
       {/* language */}
-      <div
-        className="card"
-        style={{
-          padding: 18,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <span className="label">{tr(lang, "set.lang")}</span>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            className="chip"
-            style={{ background: lang === "es" ? "var(--sun)" : "#fff" }}
-            onClick={() => setLang("es")}
-          >
-            ES
+      <div className="label" style={{ margin: "18px 0 8px" }}>
+        {tr(lang, "set.lang")}
+      </div>
+      <div className="card s2" style={{ padding: 16 }}>
+        <div className="row" style={{ gap: 8 }}>
+          <button className={"chip" + (lang === "es" ? " on" : "")} onClick={() => setLang("es")}>
+            Español
           </button>
-          <button
-            className="chip"
-            style={{ background: lang === "en" ? "var(--sun)" : "#fff" }}
-            onClick={() => setLang("en")}
-          >
-            EN
+          <button className={"chip" + (lang === "en" ? " on" : "")} onClick={() => setLang("en")}>
+            English
           </button>
         </div>
       </div>
 
-      {/* account */}
-      <div className="card" style={{ padding: 18 }}>
-        <div className="label">{tr(lang, "set.account")}</div>
-        <div
-          className="mono"
-          style={{ fontSize: 11, color: "#555", marginTop: 8, wordBreak: "break-all" }}
+      {/* security / recovery — honest passkey stance */}
+      <div className="label" style={{ margin: "18px 0 8px" }}>
+        {tr(lang, "set.recovery")}
+      </div>
+      <div className="card s2" style={{ padding: 16 }}>
+        <div className="row" style={{ gap: 10, alignItems: "flex-start" }}>
+          <Icon name="shieldcheck" size={20} style={{ color: "var(--accent)", flex: "none" }} />
+          <p className="dim" style={{ fontSize: 13, margin: 0, lineHeight: 1.5 }}>
+            {isPasskey ? tr(lang, "set.noExport") : tr(lang, "set.exportWarn")}
+          </p>
+        </div>
+      </div>
+
+      {/* quick links */}
+      <div className="card pf-menu" style={{ marginTop: 18 }}>
+        <button
+          className="pf-row pf-row--border"
+          onClick={() => router.push("/receive")}
+          type="button"
         >
-          {account?.publicKey}
-        </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-          <Chip variant="green">{account?.label ?? account?.method}</Chip>
-          <Chip>{tr(lang, "set.recovery")}</Chip>
-        </div>
+          <span className="pf-row-ico">
+            <Icon name="wallet" size={20} />
+          </span>
+          <span className="pf-row-text">
+            <span className="pf-row-title">Mi wallet</span>
+            <span className="pf-row-sub">Ver dirección y recibir</span>
+          </span>
+          <Icon name="arrowR" size={16} style={{ color: "var(--text-faint)", flex: "none" }} />
+        </button>
+        <button className="pf-row" onClick={() => router.push("/activity")} type="button">
+          <span className="pf-row-ico">
+            <Icon name="clock" size={20} />
+          </span>
+          <span className="pf-row-text">
+            <span className="pf-row-title">Actividad</span>
+            <span className="pf-row-sub">Historial de movimientos</span>
+          </span>
+          <Icon name="arrowR" size={16} style={{ color: "var(--text-faint)", flex: "none" }} />
+        </button>
       </div>
 
-      {/* advanced */}
-      <button
-        className="btn btn-ghost"
-        style={{ borderStyle: "dashed" }}
-        onClick={() => setAdvOpen(true)}
-      >
-        {tr(lang, "set.export")}
+      <button className="card pf-logout" onClick={logout} type="button">
+        <Icon name="logout" size={18} />
+        <span>{tr(lang, "set.signout")}</span>
       </button>
 
-      <button
-        className="btn btn-coral"
-        onClick={() => {
-          signOut();
-          router.replace("/auth");
-        }}
-      >
-        {tr(lang, "set.signout")}
-      </button>
-
-      <p className="mono" style={{ fontSize: 10, color: "#aaa", textAlign: "center" }}>
-        kova.app · {tr(lang, "common.testnet")} · USDC
-      </p>
-
-      <Sheet
-        open={advOpen}
-        onClose={() => {
-          if (!revealing) {
-            setAdvOpen(false);
-            setRevealed(null);
-          }
-        }}
-      >
-        {revealing ? (
-          <FaceIdBadge label={tr(lang, "common.faceid")} />
-        ) : revealed ? (
-          <>
-            <h2 className="display" style={{ fontSize: 20, marginBottom: 8 }}>
-              {tr(lang, "set.reveal")}
-            </h2>
-            <div
-              className="field mono"
-              style={{ fontSize: 12, wordBreak: "break-all", background: "#fff8ee" }}
-            >
-              {revealed}
-            </div>
-            <p className="mono" style={{ fontSize: 11, color: "var(--coral)", marginTop: 10 }}>
-              {tr(lang, "set.exportWarn")}
-            </p>
-            <button
-              className="btn"
-              style={{ marginTop: 14 }}
-              onClick={() => {
-                setAdvOpen(false);
-                setRevealed(null);
-              }}
-            >
-              OK
-            </button>
-          </>
-        ) : (
-          <>
-            <h2 className="display" style={{ fontSize: 22, marginBottom: 8 }}>
-              {tr(lang, "set.export")}
-            </h2>
-            <p className="mono" style={{ fontSize: 12, color: "#777", marginBottom: 16 }}>
-              {tr(lang, "set.exportWarn")}
-            </p>
-            <button className="btn btn-primary" onClick={reveal}>
-              {tr(lang, "set.reveal")}
-            </button>
-            <button
-              className="btn btn-ghost"
-              style={{ marginTop: 8 }}
-              onClick={() => setAdvOpen(false)}
-            >
-              {tr(lang, "common.cancel")}
-            </button>
-          </>
-        )}
-      </Sheet>
+      <div className="mono faint" style={{ fontSize: 10.5, textAlign: "center", marginTop: 16 }}>
+        kova.app · stellar testnet · USDC
+      </div>
     </div>
   );
 }

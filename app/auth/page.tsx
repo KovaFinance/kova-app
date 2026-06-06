@@ -2,17 +2,18 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Logo, Chip, Sheet, FaceIdBadge } from "@/components/ui";
 import { useStore } from "@/lib/store";
-import { tr } from "@/lib/i18n";
+import { Icon, Logo } from "@/components/kova";
 import { createPasskeyWallet, connectExistingWallet, importSecretKey } from "@/lib/stellar/passkey";
+
+const FOOTER = "kova.app · stellar testnet · USDC";
 
 export default function AuthPage() {
   const router = useRouter();
   const lang = useStore((s) => s.lang);
+  const setLang = useStore((s) => s.setLang);
   const onboarded = useStore((s) => s.onboarded);
   const signIn = useStore((s) => s.signIn);
-  const setLang = useStore((s) => s.setLang);
 
   const [busy, setBusy] = useState<null | string>(null);
   const [advOpen, setAdvOpen] = useState(false);
@@ -23,29 +24,32 @@ export default function AuthPage() {
 
   async function createFaceId() {
     setBusy("faceid");
+    setErr("");
     try {
       const signer = await createPasskeyWallet("Kova");
       signIn(signer);
-      setTimeout(go, 700);
-    } catch (e: any) {
-      setErr(e.message ?? "error");
+      setTimeout(go, 600);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Error");
       setBusy(null);
     }
   }
 
   async function connect() {
     setBusy("wallet");
+    setErr("");
     try {
       const signer = await connectExistingWallet();
       signIn(signer);
       go();
-    } catch (e: any) {
-      setErr(e.message ?? "error");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Error");
       setBusy(null);
     }
   }
 
   function importKey() {
+    setErr("");
     try {
       const signer = importSecretKey(secret);
       signIn(signer);
@@ -56,138 +60,167 @@ export default function AuthPage() {
   }
 
   return (
-    <main
-      style={{
-        minHeight: "100dvh",
-        display: "flex",
-        justifyContent: "center",
-        background: "var(--paper)",
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 440,
-          minHeight: "100dvh",
-          display: "flex",
-          flexDirection: "column",
-          padding: 24,
-          borderLeft: "3px solid #111",
-          borderRight: "3px solid #111",
-        }}
-      >
+    <main className="kova-root">
+      <div className="screen pad" style={{ display: "flex", flexDirection: "column" }}>
         {/* lang toggle */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div className="between" style={{ padding: "10px 0 4px" }}>
           <Logo size={26} />
-          <div style={{ display: "flex", gap: 6 }}>
-            <button
-              className="chip"
-              style={{ background: lang === "es" ? "var(--sun)" : "#fff" }}
-              onClick={() => setLang("es")}
-            >
+          <div className="row" style={{ gap: 6 }}>
+            <button className={"chip" + (lang === "es" ? " on" : "")} onClick={() => setLang("es")}>
               ES
             </button>
-            <button
-              className="chip"
-              style={{ background: lang === "en" ? "var(--sun)" : "#fff" }}
-              onClick={() => setLang("en")}
-            >
+            <button className={"chip" + (lang === "en" ? " on" : "")} onClick={() => setLang("en")}>
               EN
             </button>
           </div>
         </div>
 
-        {/* hero */}
         <div
+          className="au-rise"
           style={{
-            flex: 1,
             display: "flex",
             flexDirection: "column",
-            justifyContent: "center",
-            gap: 8,
+            alignItems: "center",
+            gap: 10,
+            padding: "24px 0 8px",
           }}
         >
-          <h1 className="display" style={{ fontSize: 52, lineHeight: 0.9 }}>
-            {tr(lang, "tagline.main")}
-          </h1>
-          <p style={{ fontSize: 15, color: "#444" }}>{tr(lang, "tagline.sub")}</p>
-          <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-            <Chip variant="green">{lang === "es" ? "Sin banco" : "Unbanked"}</Chip>
-            <Chip variant="sun">{lang === "es" ? "En dólares" : "In dollars"}</Chip>
-            <Chip variant="coral">{lang === "es" ? "Solo tuyo" : "Non-custodial"}</Chip>
+          <Logo size={48} />
+          <div
+            className="brand-name"
+            style={{
+              fontFamily: "var(--font-display)",
+              fontWeight: "var(--display-weight)",
+              fontSize: 26,
+            }}
+          >
+            kova
           </div>
         </div>
+        <h1 style={{ fontSize: 24, textAlign: "center", marginTop: 6 }}>
+          Empieza a ahorrar
+          <br />
+          en segundos
+        </h1>
 
-        {/* actions */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, paddingBottom: 8 }}>
-          <button className="btn btn-primary" onClick={createFaceId} disabled={!!busy}>
-            {busy === "faceid" ? "…" : tr(lang, "auth.create")}
-          </button>
+        <div style={{ flex: 1, minHeight: 18 }} />
+
+        {/* primary: Face ID */}
+        <button
+          className="card"
+          style={{ padding: 18, textAlign: "left", position: "relative" }}
+          onClick={createFaceId}
+          disabled={!!busy}
+        >
+          <span
+            className="chip on"
+            style={{ position: "absolute", top: 14, right: 14, fontSize: 10.5 }}
+          >
+            Recomendado
+          </span>
+          <div className="row" style={{ gap: 14 }}>
+            <div
+              className="tok"
+              style={{
+                width: 48,
+                height: 48,
+                background: "var(--accent)",
+                color: "var(--on-accent)",
+                borderColor: "transparent",
+              }}
+            >
+              <Icon name="face" size={24} />
+            </div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 17 }}>
+                {busy === "faceid" ? "Creando…" : "Crear cuenta con Face ID"}
+              </div>
+              <div className="dim" style={{ fontSize: 13, marginTop: 2 }}>
+                Sin banco, sin frase, sin gas
+              </div>
+            </div>
+          </div>
+          <p className="dim" style={{ fontSize: 13, lineHeight: 1.45, margin: "14px 0 0" }}>
+            Tu cuenta está protegida por Face ID —{" "}
+            <b style={{ color: "var(--text)" }}>sin frase que perder.</b>
+          </p>
+        </button>
+
+        {/* secondary: connect wallet */}
+        <button
+          className="card s2 row"
+          style={{ padding: 16, gap: 14, marginTop: 12 }}
+          onClick={connect}
+          disabled={!!busy}
+        >
+          <div className="tok">
+            <Icon name="key" size={20} />
+          </div>
+          <div style={{ flex: 1, textAlign: "left" }}>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>
+              {busy === "wallet" ? "Conectando…" : "Conectar billetera"}
+            </div>
+            <div className="faint" style={{ fontSize: 12.5 }}>
+              ¿Ya usas Stellar? Freighter · Albedo · xBull
+            </div>
+          </div>
+          <Icon name="arrowR" size={18} style={{ color: "var(--text-faint)" }} />
+        </button>
+
+        {/* advanced import */}
+        <button className="sp-link" style={{ marginTop: 14 }} onClick={() => setAdvOpen((v) => !v)}>
+          Opciones avanzadas
+        </button>
+        {advOpen && (
+          <div className="card s2" style={{ padding: 14, marginTop: 8 }}>
+            <div className="label" style={{ marginBottom: 8 }}>
+              Importar llave secreta (S…)
+            </div>
+            <input
+              className="snd-input"
+              placeholder="S…"
+              value={secret}
+              onChange={(e) => setSecret(e.target.value)}
+              spellCheck={false}
+              autoCapitalize="off"
+              autoCorrect="off"
+            />
+            <button className="btn btn-secondary" style={{ marginTop: 12 }} onClick={importKey}>
+              Importar
+            </button>
+          </div>
+        )}
+
+        {err && (
           <p
             className="mono"
-            style={{ fontSize: 11, color: "#777", textAlign: "center", margin: "-4px 0 4px" }}
+            style={{ fontSize: 11.5, color: "var(--negative)", textAlign: "center", marginTop: 12 }}
           >
-            {tr(lang, "auth.createSub")}
+            {err}
           </p>
-
-          <button className="btn" onClick={connect} disabled={!!busy}>
-            {busy === "wallet" ? "…" : tr(lang, "auth.connect")}
-          </button>
-
-          <button
-            className="btn btn-ghost"
-            style={{ borderStyle: "dashed" }}
-            onClick={() => setAdvOpen(true)}
-          >
-            {tr(lang, "auth.advanced")}
-          </button>
-
-          {err && (
-            <p
-              className="mono"
-              style={{ fontSize: 11, color: "var(--coral)", textAlign: "center" }}
-            >
-              {err}
-            </p>
-          )}
-          <p className="mono" style={{ fontSize: 10, color: "#aaa", textAlign: "center" }}>
-            {tr(lang, "tagline.pitch")} · {tr(lang, "common.testnet")}
-          </p>
+        )}
+        <div className="mono faint" style={{ fontSize: 10.5, textAlign: "center", marginTop: 16 }}>
+          {FOOTER}
         </div>
       </div>
-
-      <Sheet open={advOpen} onClose={() => setAdvOpen(false)}>
-        <h2 className="display" style={{ fontSize: 22, marginBottom: 8 }}>
-          {tr(lang, "auth.advanced")}
-        </h2>
-        <p className="mono" style={{ fontSize: 12, color: "#777", marginBottom: 12 }}>
-          {lang === "es"
-            ? "Importa una llave secreta de Stellar (S…). Solo para usuarios avanzados."
-            : "Import a Stellar secret key (S…). Advanced users only."}
-        </p>
-        <input
-          className="field mono"
-          placeholder="S…"
-          value={secret}
-          onChange={(e) => setSecret(e.target.value)}
-        />
-        <button className="btn btn-primary" style={{ marginTop: 14 }} onClick={importKey}>
-          {lang === "es" ? "Importar" : "Import"}
-        </button>
-      </Sheet>
 
       {busy === "faceid" && (
         <div
           style={{
-            position: "fixed",
+            position: "absolute",
             inset: 0,
-            background: "rgba(255,210,63,0.96)",
+            background: "rgba(10,10,10,0.92)",
             display: "grid",
             placeItems: "center",
             zIndex: 90,
           }}
         >
-          <FaceIdBadge label={tr(lang, "common.faceid")} />
+          <div style={{ textAlign: "center", color: "var(--accent)" }}>
+            <Icon name="face" size={72} sw={1.4} />
+            <div className="label" style={{ marginTop: 14, color: "var(--text-dim)" }}>
+              Confirma con Face ID
+            </div>
+          </div>
         </div>
       )}
     </main>

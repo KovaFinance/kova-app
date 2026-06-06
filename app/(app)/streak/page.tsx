@@ -1,102 +1,99 @@
 "use client";
 
-import { StreakDots } from "@/components/StreakDots";
 import { useStore } from "@/lib/store";
-import { tr } from "@/lib/i18n";
-
-const LEVELS = [
-  { key: "semilla", label: "Semilla", min: 0, emoji: "🌱" },
-  { key: "brote", label: "Brote", min: 5, emoji: "🌿" },
-  { key: "arbol", label: "Árbol", min: 13, emoji: "🌳" },
-  { key: "bosque", label: "Bosque", min: 27, emoji: "🌲" },
-  { key: "legado", label: "Legado", min: 53, emoji: "🏞️" },
-];
+import { ScreenHeader, streakMeta } from "@/components/kova";
 
 export default function StreakPage() {
-  const lang = useStore((s) => s.lang);
   const weeks = useStore((s) => s.weeks);
-
-  const currentIdx = LEVELS.reduce((acc, l, i) => (weeks >= l.min ? i : acc), 0);
-  const current = LEVELS[currentIdx];
-  const next = LEVELS[currentIdx + 1];
+  const meta = streakMeta(weeks);
+  const ringR = 88;
+  const ringLen = 2 * Math.PI * ringR;
+  const ringPct = meta.progress;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <h1 className="display" style={{ fontSize: 30 }}>
-        {tr(lang, "streak.title")}
-      </h1>
+    <div className="screen pad stk-screen">
+      <ScreenHeader title="Racha" back="/home" />
 
-      <section
-        className="card"
-        style={{
-          padding: 22,
-          background: "var(--coral)",
-          color: "#fff",
-          boxShadow: "6px 6px 0 0 #111",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <div className="stk-hero">
+        <div className="stk-ring-wrap">
+          <div className="stk-flame" aria-hidden="true">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 22c4 0 6.5-2.6 6.5-6 0-3-2-5-3.2-7.5C14 6 13.5 4 13.5 2c-2 1.5-6 5-6 10.5 0 .9.2 1.7.5 2.4C7 14 6.5 13 6.5 11.5 4.8 13.5 4 15 4 16.5 4 19.8 7.5 22 12 22Z" />
+            </svg>
+          </div>
+          <svg
+            className="stk-ring"
+            width="200"
+            height="200"
+            viewBox="0 0 200 200"
+            aria-hidden="true"
+          >
+            <defs>
+              <linearGradient id="stk-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#D4F94A" />
+                <stop offset="100%" stopColor="#A9D119" />
+              </linearGradient>
+            </defs>
+            <circle
+              cx="100"
+              cy="100"
+              r={ringR}
+              fill="none"
+              stroke="var(--border)"
+              strokeWidth="14"
+            />
+            <circle
+              cx="100"
+              cy="100"
+              r={ringR}
+              fill="none"
+              stroke="url(#stk-grad)"
+              strokeWidth="14"
+              strokeLinecap="round"
+              strokeDasharray={ringLen}
+              strokeDashoffset={ringLen * (1 - ringPct)}
+              transform="rotate(-90 100 100)"
+            />
+          </svg>
+          <div className="stk-ring-center">
+            <div className="num stk-num">{weeks}</div>
+            <div className="stk-lbl">semanas</div>
+          </div>
+        </div>
+        <p className="stk-msg">¡Sigue así! La consistencia construye tu futuro.</p>
+      </div>
+
+      <div className="card s2 stk-level">
+        <div className="stk-level-top">
+          <div className="stk-level-ico" aria-hidden="true">
+            {meta.current.emoji}
+          </div>
           <div>
-            <div className="num" style={{ fontSize: 44 }}>
-              {weeks}
+            <div className="label" style={{ marginBottom: 4 }}>
+              Nivel actual
             </div>
-            <div className="display" style={{ fontSize: 16 }}>
-              {tr(lang, "streak.weeks")}
+            <div className="stk-level-name">
+              {meta.current.name} {meta.current.emoji}
             </div>
           </div>
-          <div style={{ fontSize: 44 }}>{current.emoji}</div>
         </div>
-        <div style={{ marginTop: 14 }}>
-          <StreakDots weeks={weeks} />
+        <div className="bar stk-bar">
+          <i style={{ width: ringPct * 100 + "%" }} />
         </div>
-      </section>
-
-      <div className="card" style={{ padding: 18, background: "var(--sun)" }}>
-        <div className="mono" style={{ fontSize: 12, color: "#7a5a00" }}>
-          {tr(lang, "streak.keep")}
-        </div>
+        {!meta.atMax && (
+          <div className="stk-level-next">
+            <span className="dim" style={{ fontSize: 13 }}>
+              Próximo nivel:{" "}
+              <b style={{ color: "var(--text)" }}>
+                {meta.next.name} {meta.next.emoji}
+              </b>
+            </span>
+            <span className="faint" style={{ fontSize: 12.5 }}>
+              {meta.weeksLeft} semanas restantes
+            </span>
+          </div>
+        )}
       </div>
-
-      {/* ladder */}
-      <div className="card" style={{ padding: 8 }}>
-        {LEVELS.map((l, i) => {
-          const reached = weeks >= l.min;
-          const isCurrent = i === currentIdx;
-          return (
-            <div
-              key={l.key}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "12px 12px",
-                borderBottom: i < LEVELS.length - 1 ? "2px solid #f0e6d2" : "none",
-                opacity: reached ? 1 : 0.45,
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <span style={{ fontSize: 24 }}>{l.emoji}</span>
-                <div>
-                  <div className="display" style={{ fontSize: 16 }}>
-                    {l.label}
-                  </div>
-                  <div className="mono" style={{ fontSize: 10, color: "#999" }}>
-                    {l.min}+ {tr(lang, "streak.weeks")}
-                  </div>
-                </div>
-              </div>
-              {isCurrent && <span className="chip chip-coral">{tr(lang, "streak.level")}</span>}
-              {reached && !isCurrent && <span className="chip chip-green">✓</span>}
-            </div>
-          );
-        })}
-      </div>
-
-      {next && (
-        <p className="mono" style={{ fontSize: 11, color: "#777", textAlign: "center" }}>
-          {next.min - weeks} {tr(lang, "streak.weeks")} → {next.label} {next.emoji}
-        </p>
-      )}
     </div>
   );
 }

@@ -1,83 +1,97 @@
 "use client";
 
-import { useState } from "react";
-import { ProjectionChart } from "@/components/ProjectionChart";
+import { useEffect, useState } from "react";
 import { useStore } from "@/lib/store";
-import { tr } from "@/lib/i18n";
-import { usd, pct } from "@/lib/format";
-import { projectFutureValue } from "@/lib/yield";
+import {
+  ScreenHeader,
+  ProjectionChart,
+  chartSeries,
+  projectionYAxis,
+  fmtUSDk,
+  useCountUp,
+} from "@/components/kova";
 
 export default function ProjectionPage() {
-  const lang = useStore((s) => s.lang);
   const principal = useStore((s) => s.principal);
   const liveRate = useStore((s) => s.liveRate);
-  const month = useStore((s) => s.savedThisMonth) || 150;
-  const [years, setYears] = useState(20);
-  const [monthly, setMonthly] = useState(Math.round(month));
+  const savedThisMonth = useStore((s) => s.savedThisMonth);
 
-  const fv = projectFutureValue(monthly, liveRate, years, principal);
+  const [years, setYears] = useState(20);
+  const monthly = savedThisMonth; // the user's real monthly saving pace
+  const ratePct = (liveRate * 100).toFixed(1);
+
+  const series = chartSeries(monthly, liveRate, years, principal);
+  const final = series[series.length - 1].value;
+  const { ticks: yTicks, top: yMax } = projectionYAxis(final);
+  const headRef = useCountUp(final, { run: true });
+  const xLabels = ["Hoy", `${years / 2} años`, `${years} años`];
+
+  useEffect(() => {
+    if (headRef.current) headRef.current.textContent = "$" + final.toLocaleString("en-US");
+  }, [final, headRef]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <h1 className="display" style={{ fontSize: 30 }}>
-        {tr(lang, "proj.title")}
-      </h1>
+    <div className="screen pad prj-screen">
+      <ScreenHeader title="Proyección" back="/home" />
 
-      <div className="card" style={{ padding: 18 }}>
-        <div className="mono" style={{ fontSize: 12, color: "#555" }}>
-          {tr(lang, "proj.ifYouKeep", { y: String(years) })}
-        </div>
-        <div className="num" style={{ fontSize: 44, marginTop: 4 }}>
-          {usd(fv)}
-        </div>
-        <div className="mono" style={{ fontSize: 11, color: "#999" }}>
-          {tr(lang, "proj.estimate", { rate: pct(liveRate * 10000) })}
-        </div>
-        <div style={{ marginTop: 14 }}>
-          <ProjectionChart
-            monthly={monthly}
-            rate={liveRate}
-            years={years}
-            startingBalance={principal}
-          />
-        </div>
-      </div>
-
-      {/* year toggle */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+      <div className="prj-seg">
         {[10, 20, 30].map((y) => (
-          <button
-            key={y}
-            onClick={() => setYears(y)}
-            className="btn"
-            style={{
-              background: years === y ? "var(--coral)" : "#fff",
-              color: years === y ? "#fff" : "#111",
-              padding: "12px 0",
-            }}
-          >
-            {y} {tr(lang, "proj.years")}
+          <button key={y} className={years === y ? "on" : ""} onClick={() => setYears(y)}>
+            {y} años
           </button>
         ))}
       </div>
 
-      {/* adjust monthly */}
-      <div className="card" style={{ padding: 18 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-          <span className="label">{tr(lang, "proj.adjust")}</span>
-          <span className="num" style={{ fontSize: 18 }}>
-            {usd(monthly)}/mes
+      <div className="prj-hero">
+        <div className="label">En {years} años tendrás</div>
+        <div ref={headRef} className="num prj-hero-amt">
+          ${final.toLocaleString("en-US")}
+        </div>
+        <p className="prj-hero-sub">Si mantienes tu hábito de ahorro</p>
+      </div>
+
+      <div className="prj-chart-wrap">
+        <div className="prj-yaxis">
+          {[...yTicks].reverse().map((v) => (
+            <span key={v} className="prj-ytick">
+              {fmtUSDk(v)}
+            </span>
+          ))}
+        </div>
+        <div className="prj-chart-main">
+          <ProjectionChart
+            series={series}
+            animKey={`${years}_${Math.round(principal)}`}
+            height={200}
+            showDots={false}
+            showAllDots
+            yMax={yMax}
+          />
+          <div className="prj-xaxis">
+            {xLabels.map((l) => (
+              <span key={l}>{l}</span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="card s2 prj-meta">
+        <div className="between">
+          <span className="dim" style={{ fontSize: 13.5 }}>
+            Aporte mensual promedio
+          </span>
+          <span className="num" style={{ fontSize: 13.5 }}>
+            ${monthly.toLocaleString("en-US", { maximumFractionDigits: 0 })}
           </span>
         </div>
-        <input
-          className="neo"
-          type="range"
-          min={10}
-          max={1000}
-          step={10}
-          value={monthly}
-          onChange={(e) => setMonthly(Number(e.target.value))}
-        />
+        <div className="between" style={{ marginTop: 10 }}>
+          <span className="dim" style={{ fontSize: 13.5 }}>
+            Rendimiento promedio anual
+          </span>
+          <span className="num" style={{ fontSize: 13.5 }}>
+            {ratePct}%
+          </span>
+        </div>
       </div>
     </div>
   );

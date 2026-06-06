@@ -1,11 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import "@fontsource/anton/400.css";
-import "@fontsource/archivo/400.css";
-import "@fontsource/archivo/500.css";
-import "@fontsource/archivo/700.css";
-import "@fontsource/archivo/800.css";
-import "@fontsource/space-mono/400.css";
-import "@fontsource/space-mono/700.css";
+// Volt Dark typefaces — self-hosted (CSP-safe), exposed via the literal family names
+// referenced by app/globals.css (:root --font-display / --font-mono).
+import "@fontsource/space-grotesk/400.css";
+import "@fontsource/space-grotesk/500.css";
+import "@fontsource/space-grotesk/600.css";
+import "@fontsource/space-grotesk/700.css";
+import "@fontsource/jetbrains-mono/400.css";
+import "@fontsource/jetbrains-mono/500.css";
 import "./globals.css";
 import { Providers } from "./providers";
 
@@ -18,7 +19,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#FFF8EE",
+  themeColor: "#0A0A0A",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,

@@ -1,24 +1,25 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { useStore } from "@/lib/store";
 import { useHydrated } from "@/app/providers";
 import { BottomNav } from "@/components/BottomNav";
-import { Logo, Chip } from "@/components/ui";
-import { tr } from "@/lib/i18n";
+import { ActionSheet } from "@/components/ActionSheet";
+import { Logo } from "@/components/kova";
 import { KILL_SWITCH } from "@/lib/stellar/config";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const hydrated = useHydrated();
   const account = useStore((s) => s.account);
   const onboarded = useStore((s) => s.onboarded);
-  const mode = useStore((s) => s.mode);
   const lang = useStore((s) => s.lang);
   const refreshPosition = useStore((s) => s.refreshPosition);
   const refreshRate = useStore((s) => s.refreshRate);
   const hydrateProfile = useStore((s) => s.hydrateProfile);
+  const [actionsOpen, setActionsOpen] = useState(false);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -39,79 +40,28 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   if (!hydrated || !account) {
     return (
       <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center" }}>
-        <Logo size={32} />
+        <Logo size={40} />
       </main>
     );
   }
 
   return (
-    <main
-      style={{
-        minHeight: "100dvh",
-        display: "flex",
-        justifyContent: "center",
-        background: "var(--paper)",
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 440,
-          minHeight: "100dvh",
-          display: "flex",
-          flexDirection: "column",
-          borderLeft: "3px solid #111",
-          borderRight: "3px solid #111",
-          background: "var(--paper)",
-        }}
-        className="noscroll"
-      >
-        {/* top bar */}
-        <header
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "14px 16px",
-            borderBottom: "3px solid #111",
-            position: "sticky",
-            top: 0,
-            background: "var(--paper)",
-            zIndex: 40,
-          }}
-        >
-          <Logo size={24} />
-          <div style={{ display: "flex", gap: 6 }}>
-            <Chip variant={mode === "income" ? "green" : "sun"}>
-              {tr(lang, mode === "income" ? "home.mode.income" : "home.mode.grow")}
-            </Chip>
-          </div>
-        </header>
-
-        {KILL_SWITCH && (
-          <div
-            style={{
-              background: "var(--coral)",
-              color: "#fff",
-              padding: "8px 16px",
-              fontSize: 12,
-              textAlign: "center",
-              fontWeight: 600,
-            }}
-          >
-            {lang === "es"
-              ? "Mantenimiento — las acciones de dinero están pausadas."
-              : "Maintenance — money actions are paused."}
-          </div>
-        )}
-
-        {/* scrollable content */}
-        <div className="noscroll" style={{ flex: 1, overflowY: "auto", padding: 16 }}>
-          {children}
+    <div className="kova-root">
+      {KILL_SWITCH && (
+        <div className="kova-banner">
+          {lang === "es"
+            ? "Mantenimiento — las acciones de dinero están pausadas."
+            : "Maintenance — money actions are paused."}
         </div>
+      )}
 
-        <BottomNav />
+      {/* keyed by route so each screen plays the subtle slide-in on navigation */}
+      <div className="screen-host" key={pathname}>
+        {children}
       </div>
-    </main>
+
+      <BottomNav onFab={() => setActionsOpen(true)} />
+      <ActionSheet open={actionsOpen} onClose={() => setActionsOpen(false)} />
+    </div>
   );
 }

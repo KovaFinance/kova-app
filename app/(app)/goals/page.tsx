@@ -2,78 +2,105 @@
 
 import { useState } from "react";
 import { useStore } from "@/lib/store";
-import { usd } from "@/lib/format";
+import { Icon, ScreenHeader } from "@/components/kova";
 import { monthsToTarget } from "@/lib/yield";
 
+const RETIREMENT_GOAL = 100000;
+
 export default function GoalsPage() {
-  const lang = useStore((s) => s.lang);
   const principal = useStore((s) => s.principal);
   const liveRate = useStore((s) => s.liveRate);
-  const month = useStore((s) => s.savedThisMonth) || 150;
-  const [target, setTarget] = useState(10000);
+  const savedThisMonth = useStore((s) => s.savedThisMonth);
 
-  const months = monthsToTarget(target, month, liveRate, principal);
-  const yrs = Math.floor(months / 12);
-  const mos = months % 12;
-  const progress = Math.min(100, (principal / target) * 100);
+  const [target, setTarget] = useState(5000);
+  const retPct = Math.min(100, (principal / RETIREMENT_GOAL) * 100);
+  const tgtPct = Math.min(100, target > 0 ? (principal / target) * 100 : 0);
+  const months = monthsToTarget(target, savedThisMonth, liveRate, principal);
+  const reachLabel =
+    principal >= target
+      ? "¡Meta alcanzada!"
+      : !isFinite(months)
+        ? "Define un ahorro mensual"
+        : months < 12
+          ? `~${months} meses`
+          : `~${(months / 12).toFixed(1)} años`;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <h1 className="display" style={{ fontSize: 30 }}>
-        {lang === "es" ? "Tus metas" : "Your goals"}
-      </h1>
+    <div className="screen pad">
+      <ScreenHeader title="Metas" back="/home" />
+      <p className="dim" style={{ fontSize: 14, margin: "0 0 16px" }}>
+        Tu ahorro, hacia lo que importa.
+      </p>
 
-      <div className="card" style={{ padding: 18 }}>
-        <div className="label">{lang === "es" ? "Meta de ahorro" : "Savings goal"}</div>
-        <div className="num" style={{ fontSize: 40, marginTop: 4 }}>
-          {usd(target)}
+      {/* real retirement goal */}
+      <div className="card" style={{ padding: 16 }}>
+        <div className="row" style={{ gap: 12 }}>
+          <div
+            className="tok"
+            style={{
+              background: "var(--accent)",
+              color: "var(--on-accent)",
+              borderColor: "transparent",
+            }}
+          >
+            <Icon name="shield" size={19} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Retiro</div>
+            <div className="faint" style={{ fontSize: 12.5 }}>
+              <span className="num">
+                ${principal.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+              </span>{" "}
+              de <span className="num">${RETIREMENT_GOAL.toLocaleString()}</span>
+            </div>
+          </div>
+          <div className="num" style={{ fontSize: 18, color: "var(--accent)" }}>
+            {retPct < 1 && principal > 0 ? retPct.toFixed(2) : retPct.toFixed(0)}%
+          </div>
+        </div>
+        <div className="bar" style={{ marginTop: 12 }}>
+          <i style={{ width: Math.max(retPct, principal > 0 ? 0.8 : 0) + "%" }} />
+        </div>
+      </div>
+
+      {/* custom target planner */}
+      <div className="label" style={{ margin: "20px 0 8px" }}>
+        Planificador de metas
+      </div>
+      <div className="card s2" style={{ padding: 16 }}>
+        <div className="between">
+          <span className="dim" style={{ fontSize: 13.5 }}>
+            Meta
+          </span>
+          <span className="num" style={{ fontSize: 18 }}>
+            ${target.toLocaleString("en-US")}
+          </span>
         </div>
         <input
-          className="neo"
-          style={{ marginTop: 14 }}
           type="range"
           min={1000}
           max={100000}
           step={1000}
           value={target}
-          onChange={(e) => setTarget(Number(e.target.value))}
+          onChange={(e) => setTarget(+e.target.value)}
+          style={{ width: "100%", marginTop: 12 }}
         />
-
-        {/* progress bar */}
-        <div
-          style={{
-            marginTop: 18,
-            height: 22,
-            border: "3px solid #111",
-            borderRadius: 999,
-            overflow: "hidden",
-            background: "#fff",
-          }}
-        >
-          <div
-            style={{
-              width: `${progress}%`,
-              height: "100%",
-              background: "var(--sun)",
-              borderRight: progress < 100 ? "3px solid #111" : "none",
-            }}
-          />
+        <div className="bar" style={{ marginTop: 14 }}>
+          <i style={{ width: Math.max(tgtPct, principal > 0 ? 0.8 : 0) + "%" }} />
         </div>
-        <div className="mono" style={{ fontSize: 11, color: "#777", marginTop: 8 }}>
-          {usd(principal)} / {usd(target)} · {progress.toFixed(0)}%
+        <div className="between" style={{ marginTop: 14 }}>
+          <span className="dim" style={{ fontSize: 13.5 }}>
+            Lo alcanzas en
+          </span>
+          <span className="num" style={{ fontSize: 16, color: "var(--accent)" }}>
+            {reachLabel}
+          </span>
         </div>
-      </div>
-
-      <div className="card" style={{ padding: 18, background: "var(--sun)" }}>
-        <div className="label" style={{ color: "#7a5a00" }}>
-          {lang === "es" ? "Al ritmo actual" : "At your current pace"}
-        </div>
-        <div className="num" style={{ fontSize: 30, marginTop: 4 }}>
-          {months >= 1200 ? "—" : `${yrs}a ${mos}m`}
-        </div>
-        <div className="mono" style={{ fontSize: 11, color: "#7a5a00", marginTop: 4 }}>
-          {lang === "es" ? `ahorrando ${usd(month)}/mes` : `saving ${usd(month)}/mo`}
-        </div>
+        <p className="faint" style={{ fontSize: 11.5, margin: "10px 0 0", lineHeight: 1.45 }}>
+          Estimado con tu ahorro de este mes ($
+          {savedThisMonth.toLocaleString("en-US", { maximumFractionDigits: 0 })}) a ~
+          {(liveRate * 100).toFixed(1)}% anual.
+        </p>
       </div>
     </div>
   );
