@@ -133,14 +133,20 @@ export async function invoke(opts: {
   if (sent.status === "ERROR") {
     throw new Error(`send ${method} failed: ${JSON.stringify(sent.errorResult)}`);
   }
-  // poll for completion
+  // Poll for completion. getTransaction returns SUCCESS | FAILED | NOT_FOUND; NOT_FOUND just
+  // means "not yet included", so we keep waiting. Crucially, exhausting the budget WITHOUT an
+  // observed SUCCESS is a FAILURE, not a pass — returning the hash on a still-NOT_FOUND tx would
+  // let callers (deposit / income routing) render a fake success and inflate saved-stats.
   let status = sent.status as string;
   const hash = sent.hash;
-  for (let i = 0; i < 15 && status !== "SUCCESS"; i++) {
+  for (let i = 0; i < 30 && status !== "SUCCESS"; i++) {
     await new Promise((r) => setTimeout(r, 1000));
     const res = await server.getTransaction(hash);
     status = res.status;
     if (status === "FAILED") throw new Error(`tx ${hash} failed`);
+  }
+  if (status !== "SUCCESS") {
+    throw new Error(`tx ${hash} not confirmed (status: ${status})`);
   }
   return hash;
 }

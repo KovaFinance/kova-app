@@ -3,7 +3,13 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { Signer, VaultMode } from "./types";
-import { YIELD_RATE, isChainConfigured, KILL_SWITCH } from "./stellar/config";
+import {
+  YIELD_RATE,
+  isChainConfigured,
+  KILL_SWITCH,
+  toStroops,
+  fromStroops,
+} from "./stellar/config";
 
 const MAINTENANCE = "Kova is in maintenance — money actions are paused. Try again shortly.";
 import { vaultClient, NoPositionError } from "./stellar/vault";
@@ -40,11 +46,7 @@ interface State {
   signOut: () => void;
   setOnboarded: (v: boolean) => void;
   setRate: (bps: number) => void;
-  recordIncome: (
-    source: string,
-    kind: string,
-    amount: number
-  ) => { saved: number; spendable: number };
+  contribute: (amount: number) => Promise<{ saved: number; spendable: number; available: number }>;
   setMode: (m: VaultMode) => void;
   routeIncome: (amount: number) => Promise<{ saved: number; spendable: number }>;
   claimYield: () => Promise<number>;
@@ -52,7 +54,7 @@ interface State {
   availableIncome: () => number;
   refreshPosition: () => Promise<void>;
   refreshRate: () => Promise<void>;
-  refreshBalance: () => Promise<void>;
+  refreshBalance: () => Promise<boolean>;
   hydrateProfile: () => Promise<void>;
   hydrateStats: () => Promise<void>;
   reset: () => void;
@@ -114,25 +116,45 @@ export const useStore = create<State>()(
             .catch((e) => console.error("setRate failed:", e));
       },
 
-      recordIncome: (source, kind, amount) => {
-        const { savingsBps, signer } = get();
-        const saved = Math.round(((amount * savingsBps) / 10000) * 100) / 100;
-        const spendable = Math.round((amount - saved) * 100) / 100;
-        // optimistic local counters; chain reconciles principal via refreshPosition,
-        // and history comes from the indexer (/api/activity), not local state.
-        void source;
-        void kind;
+      // Manual contribution from the wallet's REAL available USDC. Routes the chosen amount
+      // through the vault's deposit_and_split: the user's savings % is pulled into the fund,
+      // the remainder stays in the wallet. Real and AWAITED (throws on failure → the UI shows a
+      // real error, never a fake success), capped to the actual on-chain balance so the
+      // "remaining available" we report is the true post-deposit balance. No local fallback —
+      // a manual contribution requires a signer + a configured chain.
+      contribute: async (amount) => {
+        if (KILL_SWITCH) throw new Error(MAINTENANCE);
+        const { signer, savingsBps, walletBalance } = get();
+        if (!signer || !isChainConfigured()) throw new Error("Conecta tu cuenta para aportar.");
+        if (!(amount > 0)) throw new Error("Ingresa un monto válido.");
+        // deposit_and_split only pulls the saved slice from the wallet; capping the whole
+        // amount at the available balance keeps saved (≤ amount) affordable AND makes the
+        // remaining-available figure we show exact (walletBalance − saved).
+        if (amount > walletBalance + 1e-9) throw new Error("No tienes suficiente USDC disponible.");
+
+        // Mirror the contract's integer math EXACTLY (it floors at stroops): the chain pulls
+        // savedStroops, so deriving saved/spendable/available this way keeps every displayed
+        // figure byte-for-byte aligned with the post-deposit on-chain balance.
+        const amountStroops = toStroops(amount);
+        const savedStroops = (amountStroops * BigInt(savingsBps)) / 10_000n;
+        const saved = fromStroops(savedStroops);
+        const spendable = fromStroops(amountStroops - savedStroops);
+        const beforeStroops = toStroops(walletBalance);
+
+        await vaultClient.depositAndSplit(signer, amount); // throws on failure
+
+        // Only bump optimistic counters AFTER the chain tx succeeds, then reconcile from chain.
         set((st) => ({
-          principal: st.principal + saved,
           savedThisWeek: st.savedThisWeek + saved,
           savedThisMonth: st.savedThisMonth + saved,
         }));
-        if (signer && isChainConfigured())
-          vaultClient
-            .depositAndSplit(signer, amount)
-            .then(() => get().refreshPosition())
-            .catch((e) => console.error("depositAndSplit failed:", e));
-        return { saved, spendable };
+        await get().refreshPosition();
+        const fresh = await get().refreshBalance();
+        // Authoritative post-deposit available: the freshly-read chain balance when we got one,
+        // else the exact local computation (before − saved). NEVER the stale pre-deposit value,
+        // so the success screen can't overstate the user's remaining balance on an RPC blip.
+        const available = fresh ? get().walletBalance : fromStroops(beforeStroops - savedStroops);
+        return { saved, spendable, available };
       },
 
       setMode: (m) => {
@@ -153,15 +175,21 @@ export const useStore = create<State>()(
         const { savingsBps, signer } = get();
         const saved = Math.round(((amount * savingsBps) / 10000) * 100) / 100;
         const spendable = Math.round((amount - saved) * 100) / 100;
-        set((st) => ({
-          savedThisWeek: st.savedThisWeek + saved,
-          savedThisMonth: st.savedThisMonth + saved,
-        }));
         if (signer && isChainConfigured()) {
           await vaultClient.depositAndSplit(signer, amount); // throws on failure
+          // Bump optimistic counters only AFTER success so a failed tx can't inflate stats.
+          set((st) => ({
+            savedThisWeek: st.savedThisWeek + saved,
+            savedThisMonth: st.savedThisMonth + saved,
+          }));
           await get().refreshPosition();
+          await get().refreshBalance();
         } else {
-          set((st) => ({ principal: st.principal + saved }));
+          set((st) => ({
+            principal: st.principal + saved,
+            savedThisWeek: st.savedThisWeek + saved,
+            savedThisMonth: st.savedThisMonth + saved,
+          }));
         }
         return { saved, spendable };
       },
@@ -227,12 +255,18 @@ export const useStore = create<State>()(
       },
 
       // Read the wallet's REAL spendable USDC balance from chain (the "Disponible" figure).
-      // Skip the update on a failed read (null) so a transient RPC blip can't clobber a good value.
+      // Skip the update on a failed read (null) so a transient RPC blip can't clobber a good
+      // value. Returns true only when a fresh on-chain value was read (callers use this to
+      // decide whether the stored balance can be trusted as the post-action truth).
       refreshBalance: async () => {
         const { account } = get();
-        if (!account) return;
+        if (!account) return false;
         const b = await walletUsdcBalance(account.publicKey);
-        if (b !== null) set({ walletBalance: b });
+        if (b !== null) {
+          set({ walletBalance: b });
+          return true;
+        }
+        return false;
       },
 
       // Chain-derived stats (saved this week/month + the deposit streak), from the indexer. The
