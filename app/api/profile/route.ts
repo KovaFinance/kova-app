@@ -44,8 +44,11 @@ const PatchSchema = z.object({
  * This is a non-authoritative PREFERENCES CACHE, not a source of truth. The chain is
  * authoritative: `savings_bps` and `mode` are enforced by the vault (`set_rate`/`set_mode`),
  * and the income keeper independently verifies on-chain INCOME mode before any payout (see
- * lib/stellar/keeper.ts + vault `claim_yield_for`). So a forged write here cannot cause an
- * unwanted payout or move funds — at worst it corrupts a cached display name/language until
+ * lib/stellar/keeper.ts + vault `claim_yield_for`). Forging `auto_split=true` is likewise
+ * harmless: autonomous routing also requires the keeper's delegated signer to be enrolled
+ * ON-CHAIN (via `enableAutoSplit`), which a forged DB write can't do — without it the keeper's
+ * deposit_and_split has no wallet authorization and reverts. So a forged write here cannot cause
+ * an unwanted payout or move funds — at worst it corrupts a cached display name/language until
  * the owner's client re-syncs.
  * HARDENING TODO (Phase 7): gate writes with wallet-ownership proof (a signed challenge) so
  * the cache can't be griefed at all.

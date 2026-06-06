@@ -227,19 +227,28 @@ export const useStore = create<State>()(
       },
 
       // Read the wallet's REAL spendable USDC balance from chain (the "Disponible" figure).
+      // Skip the update on a failed read (null) so a transient RPC blip can't clobber a good value.
       refreshBalance: async () => {
         const { account } = get();
         if (!account) return;
-        set({ walletBalance: await walletUsdcBalance(account.publicKey) });
+        const b = await walletUsdcBalance(account.publicKey);
+        if (b !== null) set({ walletBalance: b });
       },
 
-      // Chain-derived stats (saved this week/month + the deposit streak), from the indexer.
+      // Chain-derived stats (saved this week/month + the deposit streak), from the indexer. The
+      // saved totals are reconciled MONOTONICALLY (max of optimistic vs server) so a just-recorded
+      // deposit doesn't visibly snap back down while the indexer is still catching up; `weeks` is
+      // taken from the server (authoritative).
       hydrateStats: async () => {
         const { account } = get();
         if (!account) return;
         const s = await fetchStats(account.publicKey);
         if (s)
-          set({ savedThisWeek: s.savedThisWeek, savedThisMonth: s.savedThisMonth, weeks: s.weeks });
+          set((st) => ({
+            savedThisWeek: Math.max(st.savedThisWeek, s.savedThisWeek),
+            savedThisMonth: Math.max(st.savedThisMonth, s.savedThisMonth),
+            weeks: s.weeks,
+          }));
       },
 
       // Restore server-side settings (so a returning user on a new device is correct).
