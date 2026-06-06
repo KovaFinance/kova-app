@@ -51,6 +51,17 @@ echo "   vault: $VAULT_ID"
 stellar contract invoke --id "$VAULT_ID" --source "$SOURCE" --network "$NETWORK" -- \
   init --admin "$ADMIN" --token "$TOKEN" --venue "$VENUE_ID" --yield_bps "$YIELD_BPS"
 
+# Optional: designate the income-mode keeper (Phase 6). Set KEEPER=<G… address> to enable
+# the scheduled `claim_yield_for` payouts. The keeper has no custody — it can only realize a
+# user's own earned yield to that user. Generate + fund one with:
+#   stellar keys generate kova-keeper --network testnet --fund
+#   stellar keys address kova-keeper   # -> the G… to pass as KEEPER (and S… for KEEPER_SIGNER_SECRET)
+if [ -n "${KEEPER:-}" ]; then
+  echo "▶ Designating income keeper: $KEEPER"
+  stellar contract invoke --id "$VAULT_ID" --source "$SOURCE" --network "$NETWORK" -- \
+    set_keeper --keeper "$KEEPER"
+fi
+
 echo ""
 echo "✅ Done. Put these in .env.local:"
 echo "NEXT_PUBLIC_VAULT_CONTRACT_ID=$VAULT_ID"

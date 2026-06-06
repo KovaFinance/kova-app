@@ -16,6 +16,7 @@ pub enum DataKey {
     Token,    // USDC Stellar Asset Contract address
     Venue,    // yield venue contract (TEST-ONLY mock on testnet; real adapter on mainnet)
     YieldBps, // display-only fallback rate metadata; NOT used to mint payouts anymore
+    Keeper,   // account allowed to trigger income-mode payouts via claim_yield_for (no custody)
     Pos(Address),
 }
 
@@ -42,6 +43,8 @@ pub enum Error {
     Insufficient = 4,
     Locked = 5,
     BadAmount = 6,
+    NoKeeper = 7,
+    NotIncomeMode = 8,
 }
 
 #[contract]
@@ -80,6 +83,26 @@ impl VaultContract {
         admin.require_auth();
         env.storage().instance().set(&DataKey::YieldBps, &yield_bps);
         Ok(())
+    }
+
+    /// Designate the keeper account allowed to trigger income-mode payouts via
+    /// `claim_yield_for` (admin). The keeper has NO custody: `claim_yield_for` only ever
+    /// realizes a user's own earned yield TO that user, and never touches principal — so a
+    /// compromised keeper can at worst force a user's yield into the user's own wallet.
+    pub fn set_keeper(env: Env, keeper: Address) -> Result<(), Error> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInit)?;
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::Keeper, &keeper);
+        Ok(())
+    }
+
+    /// The designated keeper account, if set.
+    pub fn keeper(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::Keeper)
     }
 
     /// Configure the user's savings percentage (creates the position if new).
@@ -132,32 +155,36 @@ impl VaultContract {
         Ok(())
     }
 
-    /// Claim REAL earned yield: redeem only the venue shares whose value exceeds the
-    /// principal cost basis, and pay it to the user. Principal is preserved (never
-    /// reduced here). Independent of any lock.
+    /// Claim REAL earned yield (user-initiated): redeem only the venue shares whose value
+    /// exceeds the principal cost basis, and pay it to the user. Principal is preserved
+    /// (never reduced here). Independent of any lock.
     pub fn claim_yield(env: Env, user: Address) -> Result<i128, Error> {
         user.require_auth();
-        let mut pos = Self::load(&env, &user)?;
-        let nav = Self::venue_nav(&env);
-        let value = pos.shares * nav / NAV_ONE;
-        let earned = if value > pos.principal { value - pos.principal } else { 0 };
+        Self::claim_internal(&env, &user)
+    }
 
-        let mut paid = 0i128;
-        if earned > 0 {
-            // floor share redemption so remaining value never drops below principal
-            let mut to_redeem = earned * NAV_ONE / nav;
-            if to_redeem > pos.shares {
-                to_redeem = pos.shares;
-            }
-            if to_redeem > 0 {
-                paid = Self::venue_redeem(&env, &user, to_redeem);
-                pos.shares -= to_redeem;
-            }
+    /// Keeper-triggered income payout (Phase 6 — "live off your yield"). Authorized by the
+    /// designated KEEPER, not the user, so the monthly auto-payout runs without the user's
+    /// device. Identical effect to `claim_yield`: it ALWAYS pays the user and never reduces
+    /// principal, so the keeper has no custody — it can only realize a user's own earned
+    /// yield to that user. Works for both classic accounts and passkey smart wallets (no
+    /// per-user signer delegation needed). No-op (pays 0) once yield is already claimed.
+    ///
+    /// The user's ON-CHAIN opt-in is enforced here: the position must be in INCOME mode
+    /// (`set_mode(INCOME)`). This makes the user's own `set_mode` the source of truth for
+    /// auto-payout consent — a stale or poisoned off-chain target list can never cause the
+    /// keeper to act against a GROW-mode user.
+    pub fn claim_yield_for(env: Env, user: Address) -> Result<i128, Error> {
+        let keeper: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Keeper)
+            .ok_or(Error::NoKeeper)?;
+        keeper.require_auth();
+        if Self::load(&env, &user)?.mode != MODE_INCOME {
+            return Err(Error::NotIncomeMode);
         }
-        Self::save(&env, &user, &pos);
-        env.events()
-            .publish((Symbol::new(&env, "claim"), user.clone()), paid);
-        Ok(paid)
+        Self::claim_internal(&env, &user)
     }
 
     /// Withdraw principal (subject to any lock) by redeeming the corresponding venue
@@ -251,6 +278,32 @@ impl VaultContract {
             &Symbol::new(env, "redeem"),
             vec![env, to.into_val(env), shares.into_val(env)],
         )
+    }
+
+    /// Shared yield-claim core (auth is checked by the public callers): redeem the shares
+    /// whose value exceeds the principal cost basis and pay that yield to `user`. Principal
+    /// is never reduced; floor redemption keeps remaining value at/above principal.
+    fn claim_internal(env: &Env, user: &Address) -> Result<i128, Error> {
+        let mut pos = Self::load(env, user)?;
+        let nav = Self::venue_nav(env);
+        let value = pos.shares * nav / NAV_ONE;
+        let earned = if value > pos.principal { value - pos.principal } else { 0 };
+
+        let mut paid = 0i128;
+        if earned > 0 {
+            let mut to_redeem = earned * NAV_ONE / nav;
+            if to_redeem > pos.shares {
+                to_redeem = pos.shares;
+            }
+            if to_redeem > 0 {
+                paid = Self::venue_redeem(env, user, to_redeem);
+                pos.shares -= to_redeem;
+            }
+        }
+        Self::save(env, user, &pos);
+        env.events()
+            .publish((Symbol::new(env, "claim"), user.clone()), paid);
+        Ok(paid)
     }
 
     fn load(env: &Env, user: &Address) -> Result<Position, Error> {

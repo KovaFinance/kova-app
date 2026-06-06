@@ -1,8 +1,9 @@
 name: keeper-cron
 
-# Income-mode keeper (Phase 6). Triggers monthly yield payouts. Set repo secrets
-# KOVA_APP_URL and KEEPER_SECRET. NOTE: payouts require the passkey smart-wallet policy
-# signer (Phase 3) — until that's wired this is a no-op plan (see app/api/keeper/run).
+# Income-mode keeper (Phase 6). Triggers monthly on-chain `claim_yield_for` payouts for
+# income-mode users (non-custodial — only pays a user their own earned yield). Set repo
+# secrets KOVA_APP_URL and KEEPER_SECRET. Payouts run when the app also has KEEPER_SIGNER_SECRET
+# set AND the vault's keeper has been designated via `set_keeper` (see scripts/deploy-testnet.sh).
 on:
   schedule:
     - cron: "0 9 1 * *" # 09:00 UTC on the 1st of each month

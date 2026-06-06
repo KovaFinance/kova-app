@@ -28,8 +28,11 @@ const shape: Record<string, z.ZodTypeAny> = {};
 for (const key of REQUIRED_PUBLIC_ENV) {
   shape[key] = REQUIRED_URL_ENV.includes(key) ? url(key) : nonEmpty(key);
 }
-// Server-only; optional for the web build (keeper worker = Phase 6).
+// Server-only; optional for the web build (income keeper = Phase 6). KEEPER_SECRET gates the
+// /api/keeper/run HTTP endpoint; KEEPER_SIGNER_SECRET is the on-chain keeper account (S…) that
+// authorizes claim_yield_for. Both optional — without them the keeper route is a no-op.
 shape.KEEPER_SECRET = z.string().optional();
+shape.KEEPER_SIGNER_SECRET = z.string().optional();
 
 const envSchema = z.object(shape);
 

@@ -37,7 +37,18 @@ const PatchSchema = z.object({
   mode: z.enum(["grow", "income"]).optional(),
 });
 
-/** POST /api/profile { contractId, lang?, displayName?, savingsBps?, mode? } -> { ok } */
+/**
+ * POST /api/profile { contractId, lang?, displayName?, savingsBps?, mode? } -> { ok }
+ *
+ * This is a non-authoritative PREFERENCES CACHE, not a source of truth. The chain is
+ * authoritative: `savings_bps` and `mode` are enforced by the vault (`set_rate`/`set_mode`),
+ * and the income keeper independently verifies on-chain INCOME mode before any payout (see
+ * lib/stellar/keeper.ts + vault `claim_yield_for`). So a forged write here cannot cause an
+ * unwanted payout or move funds — at worst it corrupts a cached display name/language until
+ * the owner's client re-syncs.
+ * HARDENING TODO (Phase 7): gate writes with wallet-ownership proof (a signed challenge) so
+ * the cache can't be griefed at all.
+ */
 export async function POST(req: NextRequest) {
   let body: unknown;
   try {

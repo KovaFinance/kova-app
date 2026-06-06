@@ -112,6 +112,74 @@ fn claim_preserves_principal() {
 }
 
 #[test]
+fn keeper_claims_yield_for_user_and_user_receives_it() {
+    let f = setup();
+    let keeper = Address::generate(&f.env);
+    f.client.set_keeper(&keeper);
+    f.client.set_rate(&f.user, &10000u32); // save 100%
+    f.client.deposit_and_split(&f.user, &1_000_0000000i128); // 1,000 USDC principal
+    f.client.set_mode(&f.user, &MODE_INCOME); // user opts into auto-payouts on-chain
+    f.env.ledger().with_mut(|l| l.timestamp += YEAR);
+
+    let principal = f.client.position(&f.user).principal;
+    let claimable = f.client.claimable_yield(&f.user);
+    assert!(claimable > 40_0000000i128, "claimable={}", claimable);
+
+    let tok = token::Client::new(&f.env, &f.token_addr);
+    let user_before = tok.balance(&f.user);
+    let keeper_before = tok.balance(&keeper);
+
+    // KEEPER triggers the payout (not the user) — income-mode auto-claim.
+    let paid = f.client.claim_yield_for(&f.user);
+
+    // the call was authorized by the KEEPER, and the user did NOT have to authorize it.
+    let auths = f.env.auths();
+    assert!(auths.iter().any(|(a, _)| a == &keeper), "keeper authorized the payout");
+    assert!(!auths.iter().any(|(a, _)| a == &f.user), "user did NOT authorize");
+
+    // funds went to the USER, never the keeper (no custody), and principal is preserved.
+    assert!(paid > 0 && (paid - claimable).abs() < 1000, "paid={} claimable={}", paid, claimable);
+    assert_eq!(tok.balance(&f.user) - user_before, paid, "user received the yield");
+    assert_eq!(tok.balance(&keeper) - keeper_before, 0, "keeper received nothing");
+    assert_eq!(f.client.position(&f.user).principal, principal, "principal preserved");
+    assert!(f.client.claimable_yield(&f.user) < 1_0000000i128, "claimable reset");
+
+    // a second keeper run with no new yield is a safe no-op (pays 0).
+    assert_eq!(f.client.claim_yield_for(&f.user), 0);
+}
+
+#[test]
+fn claim_yield_for_requires_keeper_to_be_set() {
+    let f = setup();
+    f.client.set_rate(&f.user, &1000u32);
+    f.client.deposit_and_split(&f.user, &100_0000000i128);
+    // no keeper designated yet
+    assert_eq!(
+        f.client.try_claim_yield_for(&f.user).err().unwrap().unwrap(),
+        Error::NoKeeper
+    );
+}
+
+#[test]
+fn keeper_cannot_force_claim_for_grow_mode_user() {
+    let f = setup();
+    let keeper = Address::generate(&f.env);
+    f.client.set_keeper(&keeper);
+    f.client.set_rate(&f.user, &10000u32);
+    f.client.deposit_and_split(&f.user, &500_0000000i128); // default GROW mode (no opt-in)
+    f.env.ledger().with_mut(|l| l.timestamp += YEAR);
+    assert!(f.client.claimable_yield(&f.user) > 0, "yield has accrued");
+
+    // the keeper may NOT force a payout: the user never opted into income mode on-chain.
+    assert_eq!(
+        f.client.try_claim_yield_for(&f.user).err().unwrap().unwrap(),
+        Error::NotIncomeMode
+    );
+    // the user can still claim their own yield directly whenever they choose.
+    assert!(f.client.claim_yield(&f.user) > 0);
+}
+
+#[test]
 fn withdraw_redeems_principal_from_venue() {
     let f = setup();
     f.client.set_rate(&f.user, &10000u32);
