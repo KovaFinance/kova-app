@@ -122,22 +122,17 @@ export default function DepositPage() {
         </p>
       </div>
 
-      <div
-        className="card s2"
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 14,
-        }}
-      >
-        <span className="label">Disponible</span>
-        <span className="num" style={{ fontWeight: 700 }}>
-          ${money(walletBalance)}{" "}
-          <span className="faint" style={{ fontSize: 12 }}>
-            USDC
+      <div className="card s2 mn-balance">
+        <div className="mn-balance-l">
+          <span className="mn-balance-coin">
+            <Icon name="usdc" size={13} sw={2} />
           </span>
-        </span>
+          <span className="label">Disponible</span>
+        </div>
+        <div className="mn-balance-amt">
+          <span className="num">${money(walletBalance)}</span>
+          <span className="mn-balance-cur">USDC</span>
+        </div>
       </div>
 
       <div className="mn-amount-row">

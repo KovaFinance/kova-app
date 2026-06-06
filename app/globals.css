@@ -938,6 +938,50 @@ a {
   margin: 10px 0 0;
 }
 
+/* Available-balance bar on the deposit screen */
+.mn-balance {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 16px;
+  margin-bottom: 14px;
+}
+.mn-balance-l {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+.mn-balance-coin {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  background: rgba(200, 241, 53, 0.14);
+  color: var(--accent);
+}
+.mn-balance-amt {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  flex: none;
+  white-space: nowrap;
+}
+.mn-balance-amt .num {
+  font-weight: 700;
+  font-size: 18px;
+}
+.mn-balance-cur {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
 /* ---------- Projection screen ---------- */
 .prj-screen {
   padding-bottom: 24px;
