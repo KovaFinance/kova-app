@@ -23,7 +23,6 @@ export async function sendUsdc(signer: Signer, to: string, amountUsd: number): P
     contractId: USDC_SAC,
     method: "transfer",
     args: [addr(signer.publicKey), addr(to.trim()), i128(toStroops(amountUsd))],
-    source: signer.publicKey,
-    sign: signer.sign,
+    signer,
   });
 }

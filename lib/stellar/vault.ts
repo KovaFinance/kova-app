@@ -74,8 +74,7 @@ export async function setRate(signer: Signer, savingsBps: number): Promise<strin
     contractId: VAULT_CONTRACT_ID,
     method: "set_rate",
     args: [addr(signer.publicKey), u32(savingsBps)],
-    source: signer.publicKey,
-    sign: signer.sign,
+    signer,
   });
 }
 
@@ -90,8 +89,7 @@ export async function depositAndSplit(signer: Signer, amountUsd: number): Promis
     contractId: VAULT_CONTRACT_ID,
     method: "deposit_and_split",
     args: [addr(signer.publicKey), i128(toStroops(amountUsd))],
-    source: signer.publicKey,
-    sign: signer.sign,
+    signer,
   });
 }
 
@@ -102,8 +100,7 @@ export async function setMode(signer: Signer, mode: VaultMode): Promise<string> 
     contractId: VAULT_CONTRACT_ID,
     method: "set_mode",
     args: [addr(signer.publicKey), u32(MODE_TO_U32[mode])],
-    source: signer.publicKey,
-    sign: signer.sign,
+    signer,
   });
 }
 
@@ -114,8 +111,7 @@ export async function claimYield(signer: Signer): Promise<string> {
     contractId: VAULT_CONTRACT_ID,
     method: "claim_yield",
     args: [addr(signer.publicKey)],
-    source: signer.publicKey,
-    sign: signer.sign,
+    signer,
   });
 }
 
@@ -126,8 +122,7 @@ export async function withdraw(signer: Signer, amountUsd: number): Promise<strin
     contractId: VAULT_CONTRACT_ID,
     method: "withdraw",
     args: [addr(signer.publicKey), i128(toStroops(amountUsd))],
-    source: signer.publicKey,
-    sign: signer.sign,
+    signer,
   });
 }
 

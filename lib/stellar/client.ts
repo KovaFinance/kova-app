@@ -3,6 +3,7 @@ import {
   Horizon,
   TransactionBuilder,
   Contract,
+  Account,
   Address,
   nativeToScVal,
   scValToNative,
@@ -10,6 +11,15 @@ import {
   BASE_FEE,
 } from "@stellar/stellar-sdk";
 import { RPC_URL, HORIZON_URL, NETWORK_PASSPHRASE } from "./config";
+import type { Signer } from "../types";
+
+/**
+ * Placeholder transaction source. Soroban `simulateTransaction` does not require the
+ * source account to exist or be funded, so this stands in for read simulations and for
+ * building the gasless smart-wallet path (where a relayer channel account becomes the
+ * real source on submit). It must only be a well-formed ed25519 (G…) address.
+ */
+const PLACEHOLDER_SOURCE = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
 
 export const server = new rpc.Server(RPC_URL, {
   allowHttp: RPC_URL.startsWith("http://"),
@@ -36,12 +46,11 @@ export async function simulate<T = unknown>(
   contractId: string,
   method: string,
   args: xdr.ScVal[] = [],
-  source = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF" // placeholder read source
+  source = PLACEHOLDER_SOURCE
 ): Promise<T> {
-  const account = await server.getAccount(source).catch(async () => {
-    // fall back to any funded account isn't needed for pure simulation reads
-    return server.getAccount(source);
-  });
+  // Pure simulation needs no real/funded source — build the account locally (seq 0) so a
+  // read never depends on the placeholder existing on-chain.
+  const account = new Account(source, "0");
   const contract = new Contract(contractId);
   const tx = new TransactionBuilder(account, {
     fee: BASE_FEE,
@@ -59,25 +68,55 @@ export async function simulate<T = unknown>(
   return scValToNative(sim.result.retval) as T;
 }
 
+/** Best-effort extraction of a tx hash/id from the relayer's submit result. */
+function resultHash(r: unknown): string {
+  if (typeof r === "string") return r;
+  const o = (r ?? {}) as Record<string, unknown>;
+  return String(o.hash ?? o.txHash ?? o.id ?? "");
+}
+
 /**
- * State-changing contract call. `sign` is injected per caller:
- *   - passkey smart wallet (Face ID) via passkey-kit
- *   - a connected wallet (Freighter/Albedo)
- *   - a server keeper (income payouts)
- * Returns the transaction hash.
+ * State-changing contract call, dispatched on the signer:
+ *
+ *  - **Gasless smart wallet (passkey)** — `signer.submit` is present. The smart-wallet
+ *    contract authorizes the call (its address is the `from`/auth subject inside `args`),
+ *    so the transaction source only needs to exist long enough to simulate + assemble the
+ *    wallet's Soroban auth entry. We build with a placeholder source, `prepareTransaction`
+ *    to populate that auth entry + footprint, run WebAuthn via `signer.sign`, then hand the
+ *    signed XDR to the relayer (`signer.submit`), which re-sources to a channel account and
+ *    pays the fee. The contract can't pay fees itself, which is why the keypair RPC path
+ *    below does not work for it.
+ *  - **Keypair (imported S-key)** — the account is its own source + fee payer: build →
+ *    prepare → sign → submit → poll.
+ *
+ * Returns the transaction hash (best-effort for the relayer path).
  */
 export async function invoke(opts: {
   contractId: string;
   method: string;
   args?: xdr.ScVal[];
-  source: string; // public key of the caller
-  sign: (xdrBase64: string) => Promise<string>; // returns signed xdr
+  signer: Signer;
 }): Promise<string> {
-  const { contractId, method, args = [], source, sign } = opts;
-  const account = await server.getAccount(source);
+  const { contractId, method, args = [], signer } = opts;
   const contract = new Contract(contractId);
 
-  let tx = new TransactionBuilder(account, {
+  if (signer.submit) {
+    // Gasless smart-wallet path. The placeholder source is discarded by the relayer.
+    const tx = new TransactionBuilder(new Account(PLACEHOLDER_SOURCE, "0"), {
+      fee: BASE_FEE,
+      networkPassphrase: NETWORK_PASSPHRASE,
+    })
+      .addOperation(contract.call(method, ...args))
+      .setTimeout(60)
+      .build();
+    const prepared = await server.prepareTransaction(tx);
+    const signedXdr = await signer.sign(prepared.toXDR()); // WebAuthn over the wallet's auth entry
+    return resultHash(await signer.submit(signedXdr)); // relayer re-sources + pays + submits
+  }
+
+  // Keypair path — the signer's account is the source and fee payer.
+  const account = await server.getAccount(signer.publicKey);
+  const tx = new TransactionBuilder(account, {
     fee: BASE_FEE,
     networkPassphrase: NETWORK_PASSPHRASE,
   })
@@ -87,7 +126,7 @@ export async function invoke(opts: {
 
   // assemble Soroban auth + resource footprint
   const prepared = await server.prepareTransaction(tx);
-  const signedXdr = await sign(prepared.toXDR());
+  const signedXdr = await signer.sign(prepared.toXDR());
   const signedTx = TransactionBuilder.fromXDR(signedXdr, NETWORK_PASSPHRASE);
   const sent = await server.sendTransaction(signedTx as any);
 
@@ -96,7 +135,7 @@ export async function invoke(opts: {
   }
   // poll for completion
   let status = sent.status as string;
-  let hash = sent.hash;
+  const hash = sent.hash;
   for (let i = 0; i < 15 && status !== "SUCCESS"; i++) {
     await new Promise((r) => setTimeout(r, 1000));
     const res = await server.getTransaction(hash);
