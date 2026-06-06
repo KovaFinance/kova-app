@@ -118,10 +118,10 @@ flowchart TB
     end
 
     subgraph Store["Data — Supabase"]
-        PG[("PostgreSQL\nwallet_signers · user_profiles\nvault_events · pending_income")]
+        PG[("PostgreSQL<br/>wallet_signers · user_profiles<br/>vault_events · pending_income")]
     end
 
-    REL["OpenZeppelin Channels\n(gasless relayer)"]
+    REL["OpenZeppelin Channels<br/>(gasless relayer)"]
 
     subgraph Chain["Stellar / Soroban — testnet"]
         RPC["Soroban RPC + Horizon"]
@@ -203,7 +203,7 @@ sequenceDiagram
     PK-->>FE: secp256r1 signature (key never leaves device)
 
     FE->>RL: POST /api/relayer/submit { signed XDR }
-    Note over RL: A channel account becomes the source + pays the fee;<br/>relayer re-simulates the func/auth path
+    Note over RL: A channel account becomes the source + pays the fee — relayer re-simulates the func/auth path
     RL->>VT: submitSorobanTransaction(deposit_and_split)
     VT->>VT: saved = amount × savings_bps / 10000  (floored at stroops)
     VT->>VN: deposit_credit(saved) → mint shares
@@ -245,7 +245,7 @@ sequenceDiagram
         BE-->>FE: wallet contract C…
     end
 
-    Note over FE: signer is held in memory only — never persisted.<br/>Re-auth requires Face ID again.
+    Note over FE: signer is held in memory only — never persisted. Re-auth requires Face ID again.
 ```
 
 ---
@@ -262,7 +262,7 @@ sequenceDiagram
     participant U as User's wallet
 
     CRON->>BE: POST /api/keeper/run (x-keeper-secret)
-    Note over BE: timing-safe secret compare;<br/>KOVA_KILL_SWITCH halts payouts without a redeploy
+    Note over BE: timing-safe secret compare — KOVA_KILL_SWITCH halts payouts without a redeploy
     BE->>DB: getIncomeModeContracts()
     DB-->>BE: [ users opted into INCOME ]
 
