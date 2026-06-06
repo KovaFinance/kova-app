@@ -199,8 +199,15 @@ export default function AuthPage() {
             zIndex: 90,
           }}
         >
-          <div style={{ textAlign: "center", color: "var(--accent)" }}>
-            <Icon name="face" size={72} sw={1.4} />
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              color: "var(--accent)",
+            }}
+          >
+            <Icon name="face" size={72} sw={1.4} style={{ display: "block" }} />
             <div className="label" style={{ marginTop: 14, color: "var(--text-dim)" }}>
               {t("Confirma con Face ID", "Confirm with Face ID")}
             </div>
