@@ -215,26 +215,22 @@ export default function HomePage() {
           </div>
           <div className="hm-wallet-divider" />
           <div className="hm-wallet-cols">
-            <button type="button" className="hm-wallet-col" onClick={() => router.push("/send")}>
+            <div className="hm-wallet-col">
               <div className="hm-wallet-col-label">
                 <span className="hm-wallet-dot" aria-hidden="true" />
                 <span>Disponible</span>
               </div>
               <div className="num hm-wallet-col-amt">{fmtMoney(available, hidden)}</div>
-              <div className="hm-wallet-col-sub">USDC para usar</div>
-            </button>
-            <button
-              type="button"
-              className="hm-wallet-col hm-wallet-col--fund"
-              onClick={() => router.push("/vault")}
-            >
+              <div className="hm-wallet-col-sub">Para usar</div>
+            </div>
+            <div className="hm-wallet-col hm-wallet-col--fund">
               <div className="hm-wallet-col-label">
                 <span>Fondo de retiro</span>
                 <Icon name="lock" size={13} style={{ color: "var(--text-faint)" }} />
               </div>
               <div className="num hm-wallet-col-amt">{fmtMoney(fund, hidden)}</div>
               <div className="hm-wallet-col-sub">Protegido para tu futuro</div>
-            </button>
+            </div>
           </div>
         </div>
 
