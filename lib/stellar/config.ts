@@ -33,6 +33,12 @@ export const YIELD_RATE = Number(process.env.NEXT_PUBLIC_YIELD_RATE ?? "0.045");
  *  and a maintenance banner is shown. */
 export const KILL_SWITCH = process.env.NEXT_PUBLIC_KILL_SWITCH === "true";
 
+/** SEP-24 cash in/out anchor (Phase 5). Defaults to the SDF testnet reference anchor; its
+ *  endpoints/signing key are discovered at runtime from its stellar.toml. Test asset only. */
+export const ANCHOR_HOME_DOMAIN =
+  process.env.NEXT_PUBLIC_ANCHOR_HOME_DOMAIN ?? "testanchor.stellar.org";
+export const ANCHOR_ASSET_CODE = process.env.NEXT_PUBLIC_ANCHOR_ASSET_CODE ?? "SRT";
+
 // NOTE: the gasless-submission relayer (OpenZeppelin "Channels") credentials are
 // SERVER-ONLY — read from process.env in the submit API route, never exported here
 // (this module is reachable from client code). See app/api/relayer/submit/route.ts.

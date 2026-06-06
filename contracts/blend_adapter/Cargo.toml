@@ -1,0 +1,30 @@
+[package]
+name = "kova-blend-adapter"
+version = "0.1.0"
+edition = "2021"
+description = "Real Blend v2 yield-venue adapter for the Kova vault (replaces the TEST-ONLY mock venue on the same venue surface)"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = "22"
+# Official Blend client + contracttypes (Pool Client, Request, Positions, Reserve, ReserveData).
+# Pinned EXACTLY to 2.22.0 (=) so it resolves soroban-sdk 22, not a newer 2.x line that pulls
+# soroban-sdk 25 (which would put two SDK versions in the graph). Compiling against it
+# type-checks our Blend calls against Blend v2's exact interface.
+blend-contract-sdk = "=2.22.0"
+
+[dev-dependencies]
+soroban-sdk = { version = "22", features = ["testutils"] }
+
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+debug = 0
+strip = "symbols"
+debug-assertions = false
+panic = "abort"
+codegen-units = 1
+lto = true
