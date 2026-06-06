@@ -82,16 +82,3 @@ create table if not exists pending_income (
 
 create index if not exists pending_income_contract_status_idx
   on pending_income (contract_id, status, ts desc);
-
--- ── Testnet faucet grants (rate-limit) ─────────────────────────────────────
--- One row per test-USDC drip, so we can enforce a per-wallet cooldown.
-create table if not exists faucet_grants (
-  id          bigserial primary key,
-  contract_id text not null,
-  amount      numeric(20,7) not null,
-  tx_hash     text,
-  granted_at  timestamptz not null default now()
-);
-
-create index if not exists faucet_grants_contract_idx
-  on faucet_grants (contract_id, granted_at desc);
