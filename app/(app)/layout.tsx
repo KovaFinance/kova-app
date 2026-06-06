@@ -18,7 +18,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const lang = useStore((s) => s.lang);
   const refreshPosition = useStore((s) => s.refreshPosition);
   const refreshRate = useStore((s) => s.refreshRate);
+  const refreshBalance = useStore((s) => s.refreshBalance);
   const hydrateProfile = useStore((s) => s.hydrateProfile);
+  const hydrateStats = useStore((s) => s.hydrateStats);
   const [actionsOpen, setActionsOpen] = useState(false);
 
   useEffect(() => {
@@ -33,9 +35,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (hydrated && account) {
       void refreshPosition();
       void refreshRate();
+      void refreshBalance();
       void hydrateProfile();
+      void hydrateStats();
     }
-  }, [hydrated, account, refreshPosition, refreshRate, hydrateProfile]);
+  }, [
+    hydrated,
+    account,
+    refreshPosition,
+    refreshRate,
+    refreshBalance,
+    hydrateProfile,
+    hydrateStats,
+  ]);
 
   if (!hydrated || !account) {
     return (

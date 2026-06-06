@@ -8,7 +8,9 @@ import { YIELD_RATE, isChainConfigured, KILL_SWITCH } from "./stellar/config";
 const MAINTENANCE = "Kova is in maintenance — money actions are paused. Try again shortly.";
 import { vaultClient, NoPositionError } from "./stellar/vault";
 import { refreshRate as fetchLiveRate } from "./stellar/rate";
+import { walletUsdcBalance } from "./stellar/balance";
 import { fetchProfile, saveProfile } from "./profile/client";
+import { fetchStats } from "./stats/client";
 
 interface State {
   lang: "es" | "en";
@@ -22,6 +24,7 @@ interface State {
   // reconciled by refreshPosition and NOT persisted to localStorage (master rule #4).
   principal: number;
   accruedYield: number; // REAL venue-earned claimable yield (claimable_yield)
+  walletBalance: number; // REAL spendable USDC balance read from the USDC SAC
   lockedUntil: number | null;
   savedThisWeek: number;
   savedThisMonth: number;
@@ -43,12 +46,15 @@ interface State {
     amount: number
   ) => { saved: number; spendable: number };
   setMode: (m: VaultMode) => void;
+  routeIncome: (amount: number) => Promise<{ saved: number; spendable: number }>;
   claimYield: () => Promise<number>;
   withdraw: (amount: number) => Promise<void>;
   availableIncome: () => number;
   refreshPosition: () => Promise<void>;
   refreshRate: () => Promise<void>;
+  refreshBalance: () => Promise<void>;
   hydrateProfile: () => Promise<void>;
+  hydrateStats: () => Promise<void>;
   reset: () => void;
 }
 
@@ -64,6 +70,7 @@ export const useStore = create<State>()(
       mode: "grow",
       principal: 0,
       accruedYield: 0,
+      walletBalance: 0,
       lockedUntil: null,
       savedThisWeek: 0,
       savedThisMonth: 0,
@@ -89,6 +96,8 @@ export const useStore = create<State>()(
         // chain is the source of truth — reconcile balances + live rate after sign-in
         void get().refreshPosition();
         void get().refreshRate();
+        void get().refreshBalance();
+        void get().hydrateStats();
       },
 
       signOut: () => set({ signer: null, account: null }),
@@ -134,6 +143,27 @@ export const useStore = create<State>()(
             .setMode(signer, m)
             .then(() => get().refreshPosition())
             .catch((e) => console.error("setMode failed:", e));
+      },
+
+      // Route a DETECTED incoming payment (income watcher, Phase 4) through the vault's
+      // deposit_and_split — saves the user's % slice, leaves the rest spendable. Awaitable
+      // (throws on failure) so the caller can mark the pending income routed only on success.
+      routeIncome: async (amount) => {
+        if (KILL_SWITCH) throw new Error(MAINTENANCE);
+        const { savingsBps, signer } = get();
+        const saved = Math.round(((amount * savingsBps) / 10000) * 100) / 100;
+        const spendable = Math.round((amount - saved) * 100) / 100;
+        set((st) => ({
+          savedThisWeek: st.savedThisWeek + saved,
+          savedThisMonth: st.savedThisMonth + saved,
+        }));
+        if (signer && isChainConfigured()) {
+          await vaultClient.depositAndSplit(signer, amount); // throws on failure
+          await get().refreshPosition();
+        } else {
+          set((st) => ({ principal: st.principal + saved }));
+        }
+        return { saved, spendable };
       },
 
       // Claim REAL earned yield on-chain, then reconcile from chain.
@@ -196,6 +226,22 @@ export const useStore = create<State>()(
         set({ liveRate: r.rate, rateSource: r.source });
       },
 
+      // Read the wallet's REAL spendable USDC balance from chain (the "Disponible" figure).
+      refreshBalance: async () => {
+        const { account } = get();
+        if (!account) return;
+        set({ walletBalance: await walletUsdcBalance(account.publicKey) });
+      },
+
+      // Chain-derived stats (saved this week/month + the deposit streak), from the indexer.
+      hydrateStats: async () => {
+        const { account } = get();
+        if (!account) return;
+        const s = await fetchStats(account.publicKey);
+        if (s)
+          set({ savedThisWeek: s.savedThisWeek, savedThisMonth: s.savedThisMonth, weeks: s.weeks });
+      },
+
       // Restore server-side settings (so a returning user on a new device is correct).
       hydrateProfile: async () => {
         const { account } = get();
@@ -215,6 +261,7 @@ export const useStore = create<State>()(
           mode: "grow",
           principal: 0,
           accruedYield: 0,
+          walletBalance: 0,
           lockedUntil: null,
           savedThisWeek: 0,
           savedThisMonth: 0,

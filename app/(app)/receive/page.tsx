@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import { useStore } from "@/lib/store";
 import { Icon, Logo } from "@/components/kova";
+import { faucetInfo, requestFaucet } from "@/lib/faucet/client";
 
 function shortKey(k: string) {
   return k.length > 14 ? `${k.slice(0, 7)}…${k.slice(-6)}` : k;
@@ -17,6 +18,35 @@ export default function ReceivePage() {
   const principal = useStore((s) => s.principal);
   const address = account?.publicKey ?? "";
   const [copied, setCopied] = useState(false);
+
+  // testnet faucet (only shown when the server has one configured)
+  const [faucet, setFaucet] = useState<{ enabled: boolean; amount: number }>({
+    enabled: false,
+    amount: 0,
+  });
+  const [faucetBusy, setFaucetBusy] = useState(false);
+  const [faucetMsg, setFaucetMsg] = useState("");
+  useEffect(() => {
+    let alive = true;
+    faucetInfo().then((f) => alive && setFaucet(f));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const drip = async () => {
+    if (!address) return;
+    setFaucetBusy(true);
+    setFaucetMsg("");
+    try {
+      const { amount } = await requestFaucet(address);
+      setFaucetMsg(`✓ Enviamos ${amount} USDC de prueba — llegará en segundos.`);
+    } catch (e) {
+      setFaucetMsg(e instanceof Error ? e.message : "No se pudo fondear.");
+    } finally {
+      setFaucetBusy(false);
+    }
+  };
 
   const copyAddr = () => {
     try {
@@ -121,6 +151,42 @@ export default function ReceivePage() {
           <span>Aportar</span>
         </button>
       </div>
+
+      {/* testnet faucet — get test USDC so the wallet is actually usable end-to-end */}
+      {faucet.enabled && (
+        <div className="card s2" style={{ padding: 16, marginBottom: 8 }}>
+          <div className="row" style={{ gap: 10, alignItems: "flex-start" }}>
+            <Icon name="gift" size={18} style={{ color: "var(--accent)", flex: "none" }} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>Fondea con USDC de prueba</div>
+              <p className="faint" style={{ fontSize: 12, margin: "2px 0 0", lineHeight: 1.4 }}>
+                Solo testnet — recibe {faucet.amount} USDC de prueba para usar la app.
+              </p>
+            </div>
+          </div>
+          <button
+            className="btn btn-primary"
+            style={{ marginTop: 12 }}
+            disabled={faucetBusy}
+            onClick={drip}
+          >
+            {faucetBusy ? "Enviando…" : `Recibir ${faucet.amount} USDC de prueba`}
+          </button>
+          {faucetMsg && (
+            <p
+              className="mono"
+              style={{
+                fontSize: 11.5,
+                color: "var(--text-dim)",
+                margin: "10px 0 0",
+                textAlign: "center",
+              }}
+            >
+              {faucetMsg}
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="rcv-meta row" style={{ gap: 10 }}>
         <div className="card s2 rcv-meta-card">

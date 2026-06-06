@@ -7,6 +7,7 @@ import { useStore } from "@/lib/store";
 import { Icon, LogoMark, useCountUp, animGuard } from "@/components/kova";
 import type { IncomeEvent } from "@/lib/types";
 import { fetchActivity } from "@/lib/activity/client";
+import { fetchPendingIncome, markPendingIncome, type PendingIncome } from "@/lib/income/client";
 
 const RETIREMENT_GOAL = 100000;
 
@@ -35,9 +36,11 @@ export default function HomePage() {
   const savedThisMonth = useStore((s) => s.savedThisMonth);
   const weeks = useStore((s) => s.weeks);
   const account = useStore((s) => s.account);
+  const walletBalance = useStore((s) => s.walletBalance);
+  const routeIncome = useStore((s) => s.routeIncome);
 
   const fund = principal;
-  const available = accruedYield;
+  const available = walletBalance; // real spendable USDC in the wallet
   const total = +(available + fund).toFixed(2);
   const pctGoal = Math.min(100, (fund / RETIREMENT_GOAL) * 100);
   const pctGoalLabel = pctGoal < 1 && fund > 0 ? pctGoal.toFixed(2) : pctGoal.toFixed(1);
@@ -47,6 +50,9 @@ export default function HomePage() {
 
   const [hidden, setHidden] = useState(false);
   const [lastIncome, setLastIncome] = useState<IncomeEvent | null>(null);
+  const [pending, setPending] = useState<PendingIncome[]>([]);
+  const [routingId, setRoutingId] = useState<string | null>(null);
+  const [routeErr, setRouteErr] = useState("");
   const totalRef = useCountUp(total, { dec: 2, run: !hidden });
   const root = useRef<HTMLDivElement | null>(null);
 
@@ -63,10 +69,36 @@ export default function HomePage() {
     fetchActivity(account.publicKey, 1).then((evs) => {
       if (alive) setLastIncome(evs[0] ?? null);
     });
+    fetchPendingIncome(account.publicKey).then((p) => {
+      if (alive) setPending(p);
+    });
     return () => {
       alive = false;
     };
   }, [account]);
+
+  const routePending = async (p: PendingIncome) => {
+    if (!account) return;
+    setRoutingId(p.eventId);
+    setRouteErr("");
+    try {
+      // Mark routed FIRST (so a failed mark can't leave it re-routable / double-deposited),
+      // then do the on-chain split. The chain stays authoritative; this is the UX cache.
+      await markPendingIncome(p.eventId, account.publicKey, "routed");
+      setPending((list) => list.filter((x) => x.eventId !== p.eventId));
+      await routeIncome(p.amount); // deposit_and_split — saves the user's %
+    } catch (e) {
+      setRouteErr(e instanceof Error ? e.message : "No se pudo guardar el ingreso.");
+    } finally {
+      setRoutingId(null);
+    }
+  };
+
+  const dismissPending = async (p: PendingIncome) => {
+    if (!account) return;
+    setPending((list) => list.filter((x) => x.eventId !== p.eventId));
+    await markPendingIncome(p.eventId, account.publicKey, "dismissed");
+  };
 
   useEffect(() => {
     if (!root.current) return;
@@ -94,6 +126,70 @@ export default function HomePage() {
           </button>
         </div>
 
+        {/* pending income — detected incoming USDC the user can route through the vault */}
+        {pending.map((p) => {
+          const saved = Math.round(((p.amount * savingsBps) / 10000) * 100) / 100;
+          const busy = routingId === p.eventId;
+          return (
+            <div
+              key={p.eventId}
+              className="hm-rise card"
+              style={{ marginTop: 14, padding: 16, borderColor: "rgba(200,241,53,0.35)" }}
+            >
+              <div className="row" style={{ gap: 12 }}>
+                <div className="hm-income-ico">
+                  <Icon name="arrowDown" size={18} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="label" style={{ marginBottom: 2 }}>
+                    Ingreso recibido
+                  </div>
+                  <div className="num" style={{ fontSize: 22 }}>
+                    +$
+                    {p.amount.toLocaleString("en-US", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </div>
+                </div>
+              </div>
+              <p className="dim" style={{ fontSize: 13, lineHeight: 1.45, margin: "12px 0 0" }}>
+                ¿Guardar tu <b style={{ color: "var(--text)" }}>{savePct}%</b> (
+                <span className="num" style={{ color: "var(--positive)" }}>
+                  ${saved.toFixed(2)}
+                </span>
+                ) en tu fondo de retiro? El resto queda disponible.
+              </p>
+              <div className="row" style={{ gap: 10, marginTop: 14 }}>
+                <button
+                  className="btn btn-secondary"
+                  style={{ width: "auto", flex: 1 }}
+                  disabled={busy}
+                  onClick={() => dismissPending(p)}
+                >
+                  Descartar
+                </button>
+                <button
+                  className="btn btn-primary"
+                  style={{ width: "auto", flex: 1 }}
+                  disabled={busy}
+                  onClick={() => routePending(p)}
+                >
+                  {busy ? "Guardando…" : `Guardar ${savePct}%`}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+        {routeErr && (
+          <p
+            className="mono"
+            style={{ fontSize: 11.5, color: "var(--negative)", textAlign: "center", marginTop: 8 }}
+          >
+            {routeErr}
+          </p>
+        )}
+
         {/* wallet balance hero */}
         <div className="hm-rise hm-wallet card">
           <div className="hm-wallet-top">
@@ -119,13 +215,13 @@ export default function HomePage() {
           </div>
           <div className="hm-wallet-divider" />
           <div className="hm-wallet-cols">
-            <button type="button" className="hm-wallet-col" onClick={() => router.push("/income")}>
+            <button type="button" className="hm-wallet-col" onClick={() => router.push("/send")}>
               <div className="hm-wallet-col-label">
                 <span className="hm-wallet-dot" aria-hidden="true" />
                 <span>Disponible</span>
               </div>
               <div className="num hm-wallet-col-amt">{fmtMoney(available, hidden)}</div>
-              <div className="hm-wallet-col-sub">Rendimiento para cobrar</div>
+              <div className="hm-wallet-col-sub">USDC para usar</div>
             </button>
             <button
               type="button"
